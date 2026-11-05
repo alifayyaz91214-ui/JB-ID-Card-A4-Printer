@@ -147,12 +147,20 @@ public class MainActivity extends Activity {
     pdf.finishPage(page);return pdf;
   }
   void drawSheet(Canvas c){
-    float cardW=242.65f,cardH=153.07f,gap=32f;
-    // Wider 11.3 mm middle cutting gap; 5 rows still fit within A4.
-    float x1=(595-(2*cardW+gap))/2,x2=x1+cardW+gap,top=10f,rowGap=14f;
+    final float pageW=595f,pageH=842f;
+    final float cardW=85.6f*72f/25.4f,cardH=54f*72f/25.4f;
+    // Keep actual card dimensions. Center the entire group on the page.
+    // Fewer selected rows leave room for larger, easier-to-cut vertical gaps.
+    final float middleGap=32f; // 11.3 mm between front and back
+    final float rowGap=copyCount==5?14f:(copyCount==4?48f:(copyCount==2?65f:0f));
+    final float totalW=2f*cardW+middleGap;
+    final float totalH=copyCount*cardH+Math.max(0,copyCount-1)*rowGap;
+    final float x1=(pageW-totalW)/2f,x2=x1+cardW+middleGap;
+    final float top=(pageH-totalH)/2f;
     for(int row=0;row<copyCount;row++){
       float y=top+row*(cardH+rowGap);
-      if(front!=null)drawCard(c,front,x1,y,cardW,cardH);if(back!=null)drawCard(c,back,x2,y,cardW,cardH);
+      if(front!=null)drawCard(c,front,x1,y,cardW,cardH);
+      if(back!=null)drawCard(c,back,x2,y,cardW,cardH);
     }
   }
   void drawCard(Canvas c,Bitmap bmp,float x,float y,float w,float h){
