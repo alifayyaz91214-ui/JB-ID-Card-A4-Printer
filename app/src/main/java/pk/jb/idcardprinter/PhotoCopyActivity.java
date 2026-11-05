@@ -3,6 +3,8 @@ package pk.jb.idcardprinter;
 import android.app.Activity;
 import android.os.Bundle;
 import android.content.Intent;
+import android.net.Uri;
+import android.provider.MediaStore;
 import android.graphics.*;
 import android.graphics.pdf.PdfDocument;
 import android.os.ParcelFileDescriptor;
@@ -13,7 +15,9 @@ import android.text.*;
 import java.io.*;
 
 public class PhotoCopyActivity extends Activity {
-  static final int PICK=901,SAVE=902;
+  static final int PICK=901,SAVE=902,CAMERA=903;
+  Uri cameraUri;
+  boolean scanMode=true;
   Bitmap photo;
   int copies=12,black=20,white=0;
   float photoW=35f,photoH=45f;
@@ -40,6 +44,22 @@ public class PhotoCopyActivity extends Activity {
     summary=new TextView(this);summary.setTextSize(14);root.addView(summary);
     Button select=new Button(this);select.setText("Select / scan photo from gallery");root.addView(select);
     select.setOnClickListener(v->{Intent i=new Intent(Intent.ACTION_GET_CONTENT);i.setType("image/*");startActivityForResult(i,PICK);});
+    Button camera=new Button(this);camera.setText("Scan using camera (full resolution)");root.addView(camera);
+    camera.setOnClickListener(v->{
+      try{
+        android.content.ContentValues values=new android.content.ContentValues();
+        values.put(MediaStore.Images.Media.DISPLAY_NAME,"JB_Scan_"+System.currentTimeMillis()+".jpg");
+        values.put(MediaStore.Images.Media.MIME_TYPE,"image/jpeg");
+        cameraUri=getContentResolver().insert(MediaStore.Images.Media.EXTERNAL_CONTENT_URI,values);
+        if(cameraUri==null)throw new IOException("Cannot create camera image");
+        Intent intent=new Intent(MediaStore.ACTION_IMAGE_CAPTURE);
+        intent.putExtra(MediaStore.EXTRA_OUTPUT,cameraUri);
+        intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION|Intent.FLAG_GRANT_WRITE_URI_PERMISSION);
+        startActivityForResult(intent,CAMERA);
+      }catch(Exception e){status.setText("Camera unavailable: "+e.getMessage());}
+    });
+    CheckBox scan=new CheckBox(this);scan.setText("Document scan mode: crisp black text and clean white paper");scan.setChecked(true);root.addView(scan);
+    scan.setOnCheckedChangeListener((button,checked)->{scanMode=checked;refresh();});
     TextView sizes=new TextView(this);sizes.setText("Photo size");sizes.setTextSize(17);root.addView(sizes);
     Spinner size=new Spinner(this);String[] labels={"35 x 45 mm","40 x 50 mm","30 x 40 mm","51 x 51 mm","25 x 35 mm"};
     size.setAdapter(new ArrayAdapter<String>(this,android.R.layout.simple_spinner_dropdown_item,labels));
@@ -50,7 +70,7 @@ public class PhotoCopyActivity extends Activity {
       public void onNothingSelected(android.widget.AdapterView<?> a){}
     });root.addView(size);
     TextView quantity=new TextView(this);quantity.setText("Number of copies on A4");quantity.setTextSize(17);root.addView(quantity);
-    count=new EditText(this);count.setInputType(android.text.InputType.TYPE_CLASS_NUMBER);count.setSingleLine(true);count.setText("12");root.addView(count);
+    count=new EditText(this);count.setSelectAllOnFocus(true);count.setInputType(android.text.InputType.TYPE_CLASS_NUMBER);count.setSingleLine(true);count.setText("12");root.addView(count);
     count.addTextChangedListener(new TextWatcher(){
       public void beforeTextChanged(CharSequence s,int st,int n,int a){}
       public void onTextChanged(CharSequence s,int st,int before,int n){try{copies=Math.min(100,Math.max(1,Integer.parseInt(s.toString())));}catch(Exception e){copies=1;}refresh();}
@@ -83,7 +103,7 @@ public class PhotoCopyActivity extends Activity {
   Paint photoPaint(){
     Paint p=new Paint(Paint.ANTI_ALIAS_FLAG|Paint.FILTER_BITMAP_FLAG|Paint.DITHER_FLAG);
     float contrast=1f+black/125f;
-    float offset=128f*(1f-contrast)+white*.60f-black*.38f;
+    float offset=128f*(1f-contrast)+white*.60f-black*.38f+(scanMode?12f:0f);
     ColorMatrix gray=new ColorMatrix();gray.setSaturation(0);
     ColorMatrix tone=new ColorMatrix(new float[]{contrast,0,0,0,offset,0,contrast,0,0,offset,0,0,contrast,0,offset,0,0,0,1,0});
     gray.postConcat(tone);p.setColorFilter(new ColorMatrixColorFilter(gray));return p;
@@ -103,14 +123,24 @@ public class PhotoCopyActivity extends Activity {
   }
   PdfDocument makePdf(){PdfDocument doc=new PdfDocument();PdfDocument.Page page=doc.startPage(new PdfDocument.PageInfo.Builder(595,842,1).create());Canvas c=page.getCanvas();c.drawColor(Color.WHITE);drawPhotos(c);doc.finishPage(page);return doc;}
   @Override protected void onActivityResult(int request,int result,Intent data){
-    super.onActivityResult(request,result,data);if(result!=RESULT_OK||data==null||data.getData()==null)return;
+    super.onActivityResult(request,result,data);if(result!=RESULT_OK)return;
+    Uri selected=request==CAMERA?cameraUri:(data==null?null:data.getData());
+    if(selected==null)return;
     if(request==SAVE){try(OutputStream out=getContentResolver().openOutputStream(data.getData())){PdfDocument d=makePdf();d.writeTo(out);d.close();status.setText("A4 PDF saved.");}catch(Exception e){status.setText("Save error: "+e.getMessage());}return;}
-    if(request==PICK){try{
+    if(request==PICK||request==CAMERA){try{
       BitmapFactory.Options o=new BitmapFactory.Options();o.inJustDecodeBounds=true;
       try(InputStream in=getContentResolver().openInputStream(data.getData())){BitmapFactory.decodeStream(in,null,o);}
       o.inSampleSize=1;while(Math.max(o.outWidth/o.inSampleSize,o.outHeight/o.inSampleSize)>2600)o.inSampleSize*=2;o.inJustDecodeBounds=false;
       try(InputStream in=getContentResolver().openInputStream(data.getData())){photo=BitmapFactory.decodeStream(in,null,o);}
-      if(photo==null)throw new IOException("Cannot read photo");status.setText("Photo loaded. Adjust settings and check preview.");refresh();
+      if(photo==null)throw new IOException("Cannot read photo");
+      // Respect camera/gallery EXIF orientation before composing the A4 sheet.
+      try(InputStream exifStream=getContentResolver().openInputStream(selected)){
+        android.media.ExifInterface exif=new android.media.ExifInterface(exifStream);
+        int orientation=exif.getAttributeInt(android.media.ExifInterface.TAG_ORIENTATION,1);
+        int degrees=orientation==6?90:(orientation==3?180:(orientation==8?270:0));
+        if(degrees!=0){Matrix m=new Matrix();m.postRotate(degrees);photo=Bitmap.createBitmap(photo,0,0,photo.getWidth(),photo.getHeight(),m,true);}
+      }catch(Exception ignored){}
+      status.setText("High-resolution image loaded. Adjust scan darkness and check live A4 preview.");refresh();
     }catch(Exception e){status.setText("Photo error: "+e.getMessage());}}
   }
   void printSheet(){
