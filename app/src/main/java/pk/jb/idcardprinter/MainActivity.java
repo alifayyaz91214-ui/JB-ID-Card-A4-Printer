@@ -33,7 +33,7 @@ public class MainActivity extends Activity {
     addButton(root,"2. Select BACK photo",()->pick(PICK_BACK)); root.addView(backView);
     addButton(root,"Manual crop FRONT (4 corners)",()->openCrop(frontUri,CROP_FRONT));
     addButton(root,"Manual crop BACK (4 corners)",()->openCrop(backUri,CROP_BACK));
-    addButton(root,"Auto crop both photos",()->{if(!ready())return;Bitmap f=autoCrop(originalFront!=null?originalFront:front);Bitmap b=autoCrop(originalBack!=null?originalBack:back);boolean fc=f!=(originalFront!=null?originalFront:front),bc=b!=(originalBack!=null?originalBack:back);front=f;back=b;refresh();status.setText("Front: "+(fc?"cropped":"NOT detected")+" | Back: "+(bc?"cropped":"NOT detected")+". Use Manual Crop if not detected.");});
+    addButton(root,"Auto crop both photos",()->{if(!ready())return;Bitmap f=autoCrop(originalFront!=null?originalFront:front);Bitmap croppedBack=autoCrop(originalBack!=null?originalBack:back);boolean fc=f!=(originalFront!=null?originalFront:front),bc=croppedBack!=(originalBack!=null?originalBack:back);front=f;back=croppedBack;refresh();status.setText("Front: "+(fc?"cropped":"NOT detected")+" | Back: "+(bc?"cropped":"NOT detected")+". Use Manual Crop if not detected.");});
     addButton(root,"Print A4 directly",()->{if(!ready())return;printSheet();});
     addButton(root,"Save A4 as PDF",()->{if(!ready())return;Intent i=new Intent(Intent.ACTION_CREATE_DOCUMENT);i.setType("application/pdf");i.addCategory(Intent.CATEGORY_OPENABLE);i.putExtra(Intent.EXTRA_TITLE,"JB-ID-Cards-A4.pdf");startActivityForResult(i,SAVE);});
     status=new TextView(this);status.setText("Select both photos. Print at actual size (100%).");status.setTextSize(15);root.addView(status);
