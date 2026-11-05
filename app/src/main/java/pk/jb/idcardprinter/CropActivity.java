@@ -30,6 +30,9 @@ public class CropActivity extends Activity {
       try(InputStream in=getContentResolver().openInputStream(uri)){cropView.bitmap=BitmapFactory.decodeStream(in,null,options);}
       if(cropView.bitmap==null)throw new IOException("Cannot decode image");
       cropView.reset();
+      try {org.opencv.core.Point[] corners=CardDetector.findCorners(cropView.bitmap);
+        if(corners!=null){float[] p=new float[8];for(int k=0;k<4;k++){p[2*k]=(float)corners[k].x;p[2*k+1]=(float)corners[k].y;}cropView.points=p;cropView.invalidate();help.setText("Auto-detected corners are shown. Drag only the dots that need adjustment, then Crop & Save.");}
+      }catch(Throwable ignored){}
     }catch(Exception e){Toast.makeText(this,e.getMessage(),Toast.LENGTH_LONG).show();finish();}
   }
   void save(){
