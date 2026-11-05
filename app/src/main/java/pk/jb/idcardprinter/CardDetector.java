@@ -43,7 +43,8 @@ public final class CardDetector {
       for(MatOfPoint c:contours)c.release();
       if(best==null)return null;
       // Correct perspective and produce consistent landscape CNIC aspect ratio.
-      int outW=1000,outH=631;
+      int outW=Math.min(2800,Math.max(1000,(int)Math.round((dist(best[0],best[1])+dist(best[3],best[2]))/(2*factor))));
+      int outH=(int)Math.round(outW*54.0/85.6);
       MatOfPoint2f srcPts=new MatOfPoint2f(),dstPts=new MatOfPoint2f();
       Point[] original=new Point[4];
       for(int i=0;i<4;i++)original[i]=new Point(best[i].x/factor,best[i].y/factor);
