@@ -22,6 +22,7 @@ public class MainActivity extends Activity {
   boolean cvReady=false;
   int printMode=0; // 0 original, 1 balanced grayscale, 2 stronger grayscale, 3 dark text
   int darkness=12;
+  int brightness=10;
   int copyCount=5;
   static final int PICK_FRONT=101, PICK_BACK=102, SAVE=103, CROP_FRONT=104, CROP_BACK=105;
   @Override public void onCreate(Bundle b) {
@@ -65,6 +66,13 @@ public class MainActivity extends Activity {
       public void onStopTrackingTouch(SeekBar bar){}
     });
     root.addView(darknessSlider);
+    TextView brightLabel=new TextView(this);brightLabel.setText("Photo brightness: +"+brightness+" (-40 to +60)");root.addView(brightLabel);
+    SeekBar brightSlider=new SeekBar(this);brightSlider.setMax(100);brightSlider.setProgress(brightness+40);
+    brightSlider.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener(){
+      public void onProgressChanged(SeekBar b,int value,boolean user){brightness=value-40;brightLabel.setText("Photo brightness: "+(brightness>=0?"+":"")+brightness+" (-40 to +60)");if(user)refresh();}
+      public void onStartTrackingTouch(SeekBar b){}
+      public void onStopTrackingTouch(SeekBar b){}
+    });root.addView(brightSlider);
     TextView copiesLabel=new TextView(this);copiesLabel.setText("ID card copies per A4 sheet (front + back)");copiesLabel.setTextSize(17);root.addView(copiesLabel);
     RadioGroup copies=new RadioGroup(this);copies.setOrientation(RadioGroup.HORIZONTAL);
     int[] copyOptions={1,2,4,5};
@@ -117,21 +125,21 @@ public class MainActivity extends Activity {
   }
   Paint qualityPaint(){
     Paint paint=new Paint(Paint.ANTI_ALIAS_FLAG|Paint.FILTER_BITMAP_FLAG|Paint.DITHER_FLAG);
-    if(printMode==0)return paint;
+    if(printMode==0){if(brightness!=0){ColorMatrix light=new ColorMatrix(new float[]{1,0,0,0,brightness,0,1,0,0,brightness,0,0,1,0,brightness,0,0,0,1,0});paint.setColorFilter(new ColorMatrixColorFilter(light));}return paint;}
     ColorMatrix gray=new ColorMatrix();gray.setSaturation(0);
     ColorMatrix contrast=new ColorMatrix();
     float c=printMode==1?1.12f:(printMode==2?1.30f:1.16f);
     // Dark Text mode reduces excessive white and strengthens gray lettering.
     // User-adjustable offset, without destructive binary thresholding.
     float offset=printMode==1?7f:(printMode==2?3f:-darkness);
-    float t=128f*(1f-c)+offset;
+    float t=128f*(1f-c)+offset+brightness;
     contrast.set(new float[]{c,0,0,0,t, 0,c,0,0,t, 0,0,c,0,t, 0,0,0,1,0});
     gray.postConcat(contrast);
     paint.setColorFilter(new ColorMatrixColorFilter(gray));
     return paint;
   }
   Bitmap previewBitmap(Bitmap source){
-    if(source==null||printMode==0)return source;
+    if(source==null||(printMode==0&&brightness==0))return source;
     int w=source.getWidth(),h=source.getHeight();
     float scale=Math.min(1f,900f/Math.max(w,h));
     Bitmap result=Bitmap.createBitmap(Math.max(1,Math.round(w*scale)),Math.max(1,Math.round(h*scale)),Bitmap.Config.ARGB_8888);
