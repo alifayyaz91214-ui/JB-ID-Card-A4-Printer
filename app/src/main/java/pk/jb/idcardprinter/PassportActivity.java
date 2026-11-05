@@ -13,7 +13,7 @@ import android.widget.*;
 import java.io.*;
 
 public class PassportActivity extends Activity {
-  static final int PICK=201,SAVE=202;
+  static final int PICK=201,SAVE=202,CAMERA=203;
   Bitmap photo;
   int photoCount=6;
   int sizeIndex=0;
@@ -48,6 +48,8 @@ public class PassportActivity extends Activity {
     LinearLayout.LayoutParams previewParams=new LinearLayout.LayoutParams(-1,430);previewParams.bottomMargin=14;root.addView(sheetPreview,previewParams);
     Button pick=new Button(this);pick.setText("Select portrait from gallery");root.addView(pick);
     pick.setOnClickListener(v->{Intent i=new Intent(Intent.ACTION_GET_CONTENT);i.setType("image/*");startActivityForResult(i,PICK);});
+    Button camera=new Button(this);camera.setText("Scan / take photo with camera");root.addView(camera);
+    camera.setOnClickListener(v->{Intent i=new Intent(android.provider.MediaStore.ACTION_IMAGE_CAPTURE);try{startActivityForResult(i,CAMERA);}catch(Exception e){status.setText("Camera app unavailable.");}});
     preview=new ImageView(this);preview.setAdjustViewBounds(true);preview.setMinimumHeight(200);root.addView(preview);
     TextView note=new TextView(this);note.setText("Choose 1, 2, 4 or 6 portraits (35 x 45 mm each), with white cutting gaps and thin borders. Use a front-facing, properly lit photo with a plain background. Crop is centered; review before printing.");root.addView(note);
     TextView sizeLabel=new TextView(this);sizeLabel.setText("Photo size preset (confirm official application rules)");root.addView(sizeLabel);
@@ -56,11 +58,22 @@ public class PassportActivity extends Activity {
       public void onItemSelected(android.widget.AdapterView<?> parent,View view,int position,long id){sizeIndex=position;updateSheet();}
       public void onNothingSelected(android.widget.AdapterView<?> parent){}
     });root.addView(sizes);
-    TextView countLabel=new TextView(this);countLabel.setText("Photos per 4R sheet");countLabel.setTextSize(17);root.addView(countLabel);
+    TextView countLabel=new TextView(this);countLabel.setText("Photo copies on selected sheet");countLabel.setTextSize(17);root.addView(countLabel);
     RadioGroup countGroup=new RadioGroup(this);countGroup.setOrientation(RadioGroup.HORIZONTAL);
     int[] counts={1,2,4,6};
     for(int count:counts){RadioButton rb=new RadioButton(this);rb.setText(""+count);rb.setId(500+count);countGroup.addView(rb);}
     countGroup.check(506);countGroup.setOnCheckedChangeListener((g,id)->{photoCount=id-500;updateSheet();});root.addView(countGroup);
+    TextView customLabel=new TextView(this);customLabel.setText("Custom copies (enter any number that fits on one sheet)");root.addView(customLabel);
+    EditText customCount=new EditText(this);customCount.setInputType(android.text.InputType.TYPE_CLASS_NUMBER);customCount.setHint("Example: 12 or 20");root.addView(customCount);
+    customCount.addTextChangedListener(new android.text.TextWatcher(){
+      public void beforeTextChanged(CharSequence t,int start,int count,int after){}
+      public void onTextChanged(CharSequence t,int start,int before,int count){
+        if(t.length()==0)return;
+        try{photoCount=Math.min(100,Math.max(1,Integer.parseInt(t.toString())));countGroup.clearCheck();updateSheet();}
+        catch(NumberFormatException ignored){}
+      }
+      public void afterTextChanged(android.text.Editable e){}
+    });
     TextView paperLabel=new TextView(this);paperLabel.setText("Paper size");paperLabel.setTextSize(17);root.addView(paperLabel);
     RadioGroup paper=new RadioGroup(this);paper.setOrientation(RadioGroup.HORIZONTAL);
     RadioButton fourR=new RadioButton(this);fourR.setId(710);fourR.setText("4R (4 x 6 inch)");paper.addView(fourR);
@@ -97,29 +110,31 @@ public class PassportActivity extends Activity {
     });root.addView(bg);
     TextView editNote=new TextView(this);editNote.setText("Background replacement uses corner-color matching, not AI person segmentation. Review hair edges and official photo rules. Clothes change requires a separate AI model and is not available yet.");root.addView(editNote);
     TextView fitting=new TextView(this);fitting.setText("Larger sizes may fit fewer photos on 4R. The PDF will never shrink the selected physical photo size.");root.addView(fitting);
-    Button pdf=new Button(this);pdf.setText("Save 4R PDF");root.addView(pdf);
+    Button pdf=new Button(this);pdf.setText("Save selected sheet as PDF");root.addView(pdf);
     pdf.setOnClickListener(v->{if(!ready())return;Intent i=new Intent(Intent.ACTION_CREATE_DOCUMENT);i.setType("application/pdf");i.addCategory(Intent.CATEGORY_OPENABLE);i.putExtra(Intent.EXTRA_TITLE,a4?"JB-Passport-Photos-A4.pdf":"JB-Passport-Photos-4R.pdf");startActivityForResult(i,SAVE);});
-    Button print=new Button(this);print.setText("Print 4R directly");root.addView(print);print.setOnClickListener(v->{if(ready())printSheet();});
+    Button print=new Button(this);print.setText("Print selected sheet directly");root.addView(print);print.setOnClickListener(v->{if(ready())printSheet();});
     status=new TextView(this);status.setText("Select a photo to begin.");root.addView(status);
   }
   boolean ready(){
     if(photo==null){status.setText("Select a portrait first.");return false;}
     float w=widths[sizeIndex]*72/25.4f,h=heights[sizeIndex]*72/25.4f;
     float gapX=14f,gapY=photoCount==6?9f:14f;
-    int cols=2*w+gapX<=277f?2:1;
-    int rows=(photoCount+cols-1)/cols;
+    int cols;
+    int rows;
     float pageW=a4?595f:289f,pageH=a4?842f:431f;
     cols=(int)Math.max(1,Math.floor((pageW-24f+gapX)/(w+gapX)));
     rows=(photoCount+cols-1)/cols;
     if(rows*h+(rows-1)*gapY>pageH-24f){
-      status.setText("Selected quantity does not fit on 4R at this size. Choose fewer photos. Image dimensions will not be reduced.");
+      status.setText("Selected quantity does not fit on this sheet. Reduce copies or select A4. Photo sizes will not be reduced.");
       return false;
     }
     return true;
   }
   @Override protected void onActivityResult(int req,int result,Intent data){
     super.onActivityResult(req,result,data);
-    if(result!=RESULT_OK||data==null||data.getData()==null)return;
+    if(result!=RESULT_OK||data==null)return;
+    if(req==CAMERA){Object taken=data.getExtras()==null?null:data.getExtras().get("data");if(taken instanceof Bitmap){photo=(Bitmap)taken;refreshPreview();status.setText("Camera image loaded. Review resolution and preview before printing.");}else status.setText("Camera returned no image.");return;}
+    if(data.getData()==null)return;
     if(req==SAVE){try(OutputStream out=getContentResolver().openOutputStream(data.getData())){PdfDocument doc=makePdf();doc.writeTo(out);doc.close();status.setText("4R PDF saved.");}catch(Exception e){status.setText("Save failed: "+e.getMessage());}return;}
     if(req==PICK){try{
       BitmapFactory.Options o=new BitmapFactory.Options();o.inJustDecodeBounds=true;
@@ -219,7 +234,7 @@ public class PassportActivity extends Activity {
   }
   void printSheet(){
     PrintManager manager=(PrintManager)getSystemService(PRINT_SERVICE);
-    manager.print("JB Passport Photos 4R",new PrintDocumentAdapter(){
+    manager.print(a4?"JB Passport Photos A4":"JB Passport Photos 4R",new PrintDocumentAdapter(){
       @Override public void onLayout(PrintAttributes oldA,PrintAttributes newA,android.os.CancellationSignal signal,LayoutResultCallback callback,Bundle extras){
         callback.onLayoutFinished(new PrintDocumentInfo.Builder("JB-Passport-Photos-4R.pdf").setContentType(PrintDocumentInfo.CONTENT_TYPE_DOCUMENT).setPageCount(1).build(),true);
       }
