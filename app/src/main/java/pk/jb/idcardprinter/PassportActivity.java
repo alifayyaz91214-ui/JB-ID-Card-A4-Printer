@@ -131,8 +131,11 @@ public class PassportActivity extends Activity {
       try{
         org.opencv.core.Mat src=new org.opencv.core.Mat(),dst=new org.opencv.core.Mat();
         org.opencv.android.Utils.bitmapToMat(result,src);
-        org.opencv.imgproc.Imgproc.bilateralFilter(src,dst,5+smoothing*2,15+smoothing*10,10+smoothing*8);
-        org.opencv.android.Utils.matToBitmap(dst,result);src.release();dst.release();
+        org.opencv.core.Mat rgb=new org.opencv.core.Mat(),rgba=new org.opencv.core.Mat();
+        org.opencv.imgproc.Imgproc.cvtColor(src,rgb,org.opencv.imgproc.Imgproc.COLOR_RGBA2RGB);
+        org.opencv.imgproc.Imgproc.bilateralFilter(rgb,dst,5+smoothing*2,15+smoothing*10,10+smoothing*8);
+        org.opencv.imgproc.Imgproc.cvtColor(dst,rgba,org.opencv.imgproc.Imgproc.COLOR_RGB2RGBA);
+        org.opencv.android.Utils.matToBitmap(rgba,result);src.release();dst.release();rgb.release();rgba.release();
       }catch(Exception ignored){}
     }
     if(backgroundChoice>0){
