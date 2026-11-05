@@ -15,9 +15,13 @@ public final class CardDetector {
     Mat rgba=new Mat();
     Utils.bitmapToMat(source,rgba);
     try{
-      // Correct perspective and produce consistent landscape CNIC aspect ratio.
-      int outW=Math.min(2800,Math.max(1000,(int)Math.round((dist(original[0],original[1])+dist(original[3],original[2]))/2)));
-      int outH=(int)Math.round(outW*54.0/85.6);
+      // Correct perspective for either portrait or landscape source orientation.
+      double edgeW=(dist(original[0],original[1])+dist(original[3],original[2]))/2;
+      double edgeH=(dist(original[0],original[3])+dist(original[1],original[2]))/2;
+      boolean portrait=edgeH>edgeW;
+      int longSide=Math.min(2800,Math.max(1000,(int)Math.round(Math.max(edgeW,edgeH))));
+      int shortSide=(int)Math.round(longSide*54.0/85.6);
+      int outW=portrait?shortSide:longSide,outH=portrait?longSide:shortSide;
       MatOfPoint2f srcPts=new MatOfPoint2f(),dstPts=new MatOfPoint2f();
       // Add a very small 0.5% edge safety margin (avoid surrounding fabric) about its centre.
       // Clamp to source bounds to avoid sampling outside the photo.
@@ -32,7 +36,12 @@ public final class CardDetector {
       dstPts.fromArray(new Point(0,0),new Point(outW-1,0),new Point(outW-1,outH-1),new Point(0,outH-1));
       Mat transform=Imgproc.getPerspectiveTransform(srcPts,dstPts),output=new Mat();
       Imgproc.warpPerspective(rgba,output,transform,new Size(outW,outH));
-      Bitmap result=Bitmap.createBitmap(outW,outH,Bitmap.Config.ARGB_8888);
+      if(portrait){
+        Mat rotated=new Mat();
+        Core.rotate(output,rotated,Core.ROTATE_90_CLOCKWISE);
+        output.release();output=rotated;
+      }
+      Bitmap result=Bitmap.createBitmap(output.cols(),output.rows(),Bitmap.Config.ARGB_8888);
       Utils.matToBitmap(output,result);
       srcPts.release();dstPts.release();transform.release();output.release();
       return result;
@@ -77,8 +86,9 @@ public final class CardDetector {
               double ratio=width/Math.max(1,height);
               double cx=(ordered[0].x+ordered[1].x+ordered[2].x+ordered[3].x)/4;
               double cy=(ordered[0].y+ordered[1].y+ordered[2].y+ordered[3].y)/4;
-              if(ratio>=1.35&&ratio<=1.88 && cx>small.width()*.08&&cx<small.width()*.92 && cy>small.height()*.08&&cy<small.height()*.92){
-                double score=area/frame-.24*Math.abs(ratio-85.6/54.0);
+              if(((ratio>=1.35&&ratio<=1.88)||(ratio>=.53&&ratio<=.74)) && cx>small.width()*.08&&cx<small.width()*.92 && cy>small.height()*.08&&cy<small.height()*.92){
+                double normalizedRatio=ratio>=1?ratio:1.0/ratio;
+                double score=area/frame-.24*Math.abs(normalizedRatio-85.6/54.0);
                 if(score>bestScore){bestScore=score;best=ordered;}
               }
             }
@@ -95,15 +105,15 @@ public final class CardDetector {
   }
   static double dist(Point a,Point b){return Math.hypot(a.x-b.x,a.y-b.y);}
   static Point[] order(Point[] points){
-    Point tl=null,tr=null,br=null,bl=null;
-    double minSum=Double.MAX_VALUE,maxSum=-Double.MAX_VALUE,minDiff=Double.MAX_VALUE,maxDiff=-Double.MAX_VALUE;
-    for(Point p:points){
-      double sum=p.x+p.y,diff=p.y-p.x;
-      if(sum<minSum){minSum=sum;tl=p;}
-      if(sum>maxSum){maxSum=sum;br=p;}
-      if(diff<minDiff){minDiff=diff;tr=p;}
-      if(diff>maxDiff){maxDiff=diff;bl=p;}
-    }
-    return new Point[]{tl,tr,br,bl};
+    // Angle-based ordering avoids duplicated corners on steeply rotated cards.
+    double cx=0,cy=0;
+    for(Point p:points){cx+=p.x;cy+=p.y;}
+    cx/=points.length;cy/=points.length;
+    final double centerX=cx,centerY=cy;
+    Point[] sorted=points.clone();
+    Arrays.sort(sorted,(a,b)->Double.compare(Math.atan2(a.y-centerY,a.x-centerX),Math.atan2(b.y-centerY,b.x-centerX)));
+    int first=0;double min=Double.MAX_VALUE;
+    for(int i=0;i<4;i++){double sum=sorted[i].x+sorted[i].y;if(sum<min){min=sum;first=i;}}
+    return new Point[]{sorted[first],sorted[(first+1)%4],sorted[(first+2)%4],sorted[(first+3)%4]};
   }
 }
