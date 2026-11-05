@@ -18,6 +18,33 @@ public class HomeActivity extends Activity {
   TextView text(String value,int size,boolean bold,int color){
     TextView t=new TextView(this);t.setText(value);t.setTextSize(size);t.setTextColor(color);if(bold)t.setTypeface(null,Typeface.BOLD);return t;
   }
+  class BrandBanner extends View {
+    Paint p=new Paint(3);
+    BrandBanner(){super(HomeActivity.this);}
+    void txt(Canvas c,String label,int color,float size,boolean bold,float x,float y){
+      p.setColor(color);p.setTextSize(size);p.setTypeface(bold?Typeface.create("sans-serif-condensed",Typeface.BOLD):Typeface.create("sans-serif",Typeface.NORMAL));c.drawText(label,x,y,p);
+    }
+    @Override protected void onDraw(Canvas canvas){
+      super.onDraw(canvas);int save=canvas.save();canvas.scale(getWidth()/360f,getHeight()/142f);
+      p.setColor(Color.WHITE);canvas.drawRoundRect(new RectF(2,2,358,140),19,19,p);
+      p.setStyle(Paint.Style.STROKE);p.setStrokeWidth(3);p.setColor(Color.rgb(15,52,139));canvas.drawRoundRect(new RectF(3,3,357,139),18,18,p);p.setStyle(Paint.Style.FILL);
+      p.setColor(Color.rgb(25,60,139));canvas.drawRoundRect(new RectF(13,14,77,76),12,12,p);
+      txt(canvas,"JB",Color.WHITE,33,true,21,58);
+      txt(canvas,"JB",Color.rgb(201,17,30),38,true,89,48);
+      txt(canvas,"Mobile & PhotoState",Color.rgb(13,42,119),22,true,140,44);
+      txt(canvas,"03061427341",Color.rgb(180,14,29),24,true,89,74);
+      p.setColor(Color.rgb(233,23,34));canvas.drawRoundRect(new RectF(13,86,347,91),2,2,p);
+      String[] items={"PRINT","PASSPORT","MOBILE","ACCESSORIES","REPAIR","FRAMES","ONLINE"};
+      float[] starts={13,61,119,168,243,287,322};
+      for(int i=0;i<items.length;i++){
+        float x=starts[i];p.setColor(i%2==0?Color.rgb(20,53,136):Color.rgb(30,92,185));
+        float width=i==3?69:(i==1?56:(i==5?38:(i==6?29:45)));
+        canvas.drawRoundRect(new RectF(x,103,Math.min(349,x+width),125),7,7,p);
+        txt(canvas,items[i],Color.WHITE,i==3?7.4f:(i==6?7.3f:8.2f),true,x+3,117);
+      }
+      canvas.restoreToCount(save);
+    }
+  }
   class ServiceArt extends View {
     boolean idCard;Paint p=new Paint(3);
     ServiceArt(boolean card){super(HomeActivity.this);idCard=card;}
@@ -60,8 +87,9 @@ public class HomeActivity extends Activity {
     super.onCreate(b);
     ScrollView scroll=new ScrollView(this);scroll.setFillViewport(true);
     LinearLayout root=new LinearLayout(this);root.setOrientation(1);root.setPadding(28,48,28,40);root.setBackgroundColor(Color.rgb(244,247,252));scroll.addView(root);
-    TextView brand=text("JB  /  MOBILE & PHOTOSTATE",13,true,blue);root.addView(brand);
-    TextView title=text("Your Print Studio",32,true,navy);title.setPadding(0,28,0,12);root.addView(title);
+    BrandBanner banner=new BrandBanner();
+    LinearLayout.LayoutParams bannerLp=new LinearLayout.LayoutParams(-1,150);bannerLp.bottomMargin=18;root.addView(banner,bannerLp);
+    TextView title=text("Your Print Studio",29,true,navy);title.setPadding(0,8,0,12);root.addView(title);
     TextView sub=text("Professional ID copies and passport photos, prepared on your phone.",15,false,Color.rgb(92,108,130));sub.setPadding(0,0,0,34);root.addView(sub);
     service(root,"01","ID Card A4 Printer","Auto crop, corner adjustment, print enhancement and 1-5 front/back copies.",MainActivity.class);
     service(root,"02","Passport Photo Studio","Country size presets, 1-6 prints, cutting margins and 4R PDF.",PassportActivity.class);
