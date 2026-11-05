@@ -21,6 +21,7 @@ public class MainActivity extends Activity {
   boolean cvReady=false;
   int printMode=0; // 0 original, 1 balanced grayscale, 2 stronger grayscale, 3 dark text
   int darkness=12;
+  int copyCount=5;
   static final int PICK_FRONT=101, PICK_BACK=102, SAVE=103, CROP_FRONT=104, CROP_BACK=105;
   @Override public void onCreate(Bundle b) {
     super.onCreate(b);
@@ -50,6 +51,11 @@ public class MainActivity extends Activity {
       public void onStopTrackingTouch(SeekBar bar){}
     });
     root.addView(darknessSlider);
+    TextView copiesLabel=new TextView(this);copiesLabel.setText("ID card copies per A4 sheet (front + back)");copiesLabel.setTextSize(17);root.addView(copiesLabel);
+    RadioGroup copies=new RadioGroup(this);copies.setOrientation(RadioGroup.HORIZONTAL);
+    int[] copyOptions={1,2,4,5};
+    for(int count:copyOptions){RadioButton rb=new RadioButton(this);rb.setId(600+count);rb.setText(""+count);copies.addView(rb);}
+    copies.check(605);copies.setOnCheckedChangeListener((g,id)->copyCount=id-600);root.addView(copies);
     addButton(root,"Print A4 directly",()->{if(!ready())return;printSheet();});
     addButton(root,"Save A4 as PDF",()->{if(!ready())return;Intent i=new Intent(Intent.ACTION_CREATE_DOCUMENT);i.setType("application/pdf");i.addCategory(Intent.CATEGORY_OPENABLE);i.putExtra(Intent.EXTRA_TITLE,"JB-ID-Cards-A4.pdf");startActivityForResult(i,SAVE);});
     status=new TextView(this);status.setText("Select both photos. Print at actual size (100%).");status.setTextSize(15);root.addView(status);
@@ -118,7 +124,7 @@ public class MainActivity extends Activity {
     Paint p=new Paint(3);p.setColor(Color.BLACK);p.setStyle(Paint.Style.STROKE);p.setStrokeWidth(.65f);
     float cardW=242.65f,cardH=153.07f,gap=16f;
     float x1=(595-(2*cardW+gap))/2,x2=x1+cardW+gap,top=12.5f,rowGap=12f;
-    for(int row=0;row<5;row++){
+    for(int row=0;row<copyCount;row++){
       float y=top+row*(cardH+rowGap);
       drawCard(c,front,x1,y,cardW,cardH,p);drawCard(c,back,x2,y,cardW,cardH,p);
     }
