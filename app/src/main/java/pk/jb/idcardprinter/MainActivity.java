@@ -19,6 +19,7 @@ public class MainActivity extends Activity {
   ImageView frontView, backView;
   TextView status;
   boolean cvReady=false;
+  int printMode=0; // 0 original, 1 balanced grayscale, 2 stronger grayscale
   static final int PICK_FRONT=101, PICK_BACK=102, SAVE=103, CROP_FRONT=104, CROP_BACK=105;
   @Override public void onCreate(Bundle b) {
     super.onCreate(b);
@@ -34,6 +35,12 @@ public class MainActivity extends Activity {
     addButton(root,"Manual crop FRONT (4 corners)",()->openCrop(frontUri,CROP_FRONT));
     addButton(root,"Manual crop BACK (4 corners)",()->openCrop(backUri,CROP_BACK));
     addButton(root,"Auto crop both photos",()->{if(!ready())return;Bitmap f=autoCrop(originalFront!=null?originalFront:front);Bitmap croppedBack=autoCrop(originalBack!=null?originalBack:back);boolean fc=f!=(originalFront!=null?originalFront:front),bc=croppedBack!=(originalBack!=null?originalBack:back);front=f;back=croppedBack;refresh();status.setText("Front: "+(fc?"cropped":"NOT detected")+" | Back: "+(bc?"cropped":"NOT detected")+". Use Manual Crop if not detected.");});
+    TextView printLabel=new TextView(this);printLabel.setText("Print quality / color mode");printLabel.setTextSize(17);root.addView(printLabel);
+    RadioGroup modes=new RadioGroup(this);modes.setOrientation(RadioGroup.VERTICAL);
+    String[] names={"Original Color","B&W Enhanced (recommended)","B&W High Contrast"};
+    for(int k=0;k<names.length;k++){final int mode=k;RadioButton rb=new RadioButton(this);rb.setText(names[k]);rb.setId(400+k);modes.addView(rb);}
+    modes.check(400);modes.setOnCheckedChangeListener((group,id)->{printMode=id-400;refresh();status.setText("Preview and PDF will use selected print mode. Review fine text before printing.");});
+    root.addView(modes);
     addButton(root,"Print A4 directly",()->{if(!ready())return;printSheet();});
     addButton(root,"Save A4 as PDF",()->{if(!ready())return;Intent i=new Intent(Intent.ACTION_CREATE_DOCUMENT);i.setType("application/pdf");i.addCategory(Intent.CATEGORY_OPENABLE);i.putExtra(Intent.EXTRA_TITLE,"JB-ID-Cards-A4.pdf");startActivityForResult(i,SAVE);});
     status=new TextView(this);status.setText("Select both photos. Print at actual size (100%).");status.setTextSize(15);root.addView(status);
@@ -50,7 +57,7 @@ public class MainActivity extends Activity {
     try{
       BitmapFactory.Options opts=new BitmapFactory.Options();opts.inJustDecodeBounds=true;
       try(InputStream in=getContentResolver().openInputStream(data.getData())){BitmapFactory.decodeStream(in,null,opts);}
-      opts.inSampleSize=1;while(Math.max(opts.outWidth/opts.inSampleSize,opts.outHeight/opts.inSampleSize)>2000)opts.inSampleSize*=2;
+      opts.inSampleSize=1;while(Math.max(opts.outWidth/opts.inSampleSize,opts.outHeight/opts.inSampleSize)>3600)opts.inSampleSize*=2;
       opts.inJustDecodeBounds=false;
       Bitmap bmp;
       try(InputStream in=getContentResolver().openInputStream(data.getData())){bmp=BitmapFactory.decodeStream(in,null,opts);}
@@ -63,12 +70,34 @@ public class MainActivity extends Activity {
       refresh();
     }catch(Exception e){status.setText("Image error: "+e.getMessage());}
   }
-  void refresh(){frontView.setImageDrawable(null);backView.setImageDrawable(null);frontView.setImageBitmap(front);backView.setImageBitmap(back);frontView.invalidate();backView.invalidate();}
+  void refresh(){frontView.setImageDrawable(null);backView.setImageDrawable(null);frontView.setImageBitmap(previewBitmap(front));backView.setImageBitmap(previewBitmap(back));frontView.invalidate();backView.invalidate();}
   boolean ready(){if(front==null||back==null){status.setText("Please select FRONT and BACK first.");return false;}return true;}
   Bitmap autoCrop(Bitmap src){
     if(src==null||!cvReady)return src;
     try{Bitmap cropped=CardDetector.detect(src);return cropped==null?src:cropped;}
     catch(Exception e){return src;}
+  }
+  Paint qualityPaint(){
+    Paint paint=new Paint(Paint.ANTI_ALIAS_FLAG|Paint.FILTER_BITMAP_FLAG|Paint.DITHER_FLAG);
+    if(printMode==0)return paint;
+    ColorMatrix gray=new ColorMatrix();gray.setSaturation(0);
+    ColorMatrix contrast=new ColorMatrix();
+    float c=printMode==1?1.12f:1.30f;
+    float offset=printMode==1?7f:3f;
+    float t=128f*(1f-c)+offset;
+    contrast.set(new float[]{c,0,0,0,t, 0,c,0,0,t, 0,0,c,0,t, 0,0,0,1,0});
+    gray.postConcat(contrast);
+    paint.setColorFilter(new ColorMatrixColorFilter(gray));
+    return paint;
+  }
+  Bitmap previewBitmap(Bitmap source){
+    if(source==null||printMode==0)return source;
+    int w=source.getWidth(),h=source.getHeight();
+    float scale=Math.min(1f,900f/Math.max(w,h));
+    Bitmap result=Bitmap.createBitmap(Math.max(1,Math.round(w*scale)),Math.max(1,Math.round(h*scale)),Bitmap.Config.ARGB_8888);
+    Canvas canvas=new Canvas(result);canvas.drawColor(Color.WHITE);
+    canvas.drawBitmap(source,null,new Rect(0,0,result.getWidth(),result.getHeight()),qualityPaint());
+    return result;
   }
   // A4 at 72dpi: 595 x 842 points. Each card is 85.6 x 54mm.
   // Front on left, back on right, repeated in 5 rows with cutting gaps.
@@ -86,7 +115,7 @@ public class MainActivity extends Activity {
   }
   void drawCard(Canvas c,Bitmap bmp,float x,float y,float w,float h,Paint border){
     RectF r=new RectF(x,y,x+w,y+h);
-    Paint fill=new Paint(3);
+    Paint fill=qualityPaint();
     c.drawBitmap(bmp,null,r,fill);
     c.drawRect(r,border);
   }
@@ -101,6 +130,6 @@ public class MainActivity extends Activity {
         try(FileOutputStream out=new FileOutputStream(destination.getFileDescriptor())){PdfDocument pdf=makePdf();pdf.writeTo(out);pdf.close();callback.onWriteFinished(new PageRange[]{PageRange.ALL_PAGES});}
         catch(Exception e){callback.onWriteFailed(e.getMessage());}
       }
-    },new PrintAttributes.Builder().setMediaSize(PrintAttributes.MediaSize.ISO_A4).setColorMode(PrintAttributes.COLOR_MODE_COLOR).build());
+    },new PrintAttributes.Builder().setMediaSize(PrintAttributes.MediaSize.ISO_A4).setColorMode(printMode==0?PrintAttributes.COLOR_MODE_COLOR:PrintAttributes.COLOR_MODE_MONOCHROME).build());
   }
 }
