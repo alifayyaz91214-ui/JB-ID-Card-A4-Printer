@@ -57,7 +57,7 @@ public class PassportActivity extends Activity {
     PdfDocument doc=new PdfDocument();PdfDocument.Page page=doc.startPage(new PdfDocument.PageInfo.Builder(pageW,pageH,1).create());
     Canvas canvas=page.getCanvas();canvas.drawColor(Color.WHITE);
     float w=35f*72/25.4f,h=45f*72/25.4f;
-    float gapX=14f,gapY=photoCount==6?5f:14f;
+    float gapX=14f,gapY=photoCount==6?9f:14f;
     int rows=photoCount/2;
     float left=(pageW-(2*w+gapX))/2f,top=(pageH-(rows*h+(rows-1)*gapY))/2f;
     Paint imagePaint=new Paint(Paint.ANTI_ALIAS_FLAG|Paint.FILTER_BITMAP_FLAG);
