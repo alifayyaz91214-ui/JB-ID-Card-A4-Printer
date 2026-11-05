@@ -46,6 +46,8 @@ public class MainActivity extends Activity {
     frontView.setMinimumHeight(130); backView.setMinimumHeight(130);
     addButton(root,"1. Select FRONT photo",()->pick(PICK_FRONT)); root.addView(frontView);
     addButton(root,"2. Select BACK photo",()->pick(PICK_BACK)); root.addView(backView);
+    addButton(root,"Rotate FRONT 90°",()->rotateCard(true));
+    addButton(root,"Rotate BACK 90°",()->rotateCard(false));
     addButton(root,"Manual crop FRONT (4 corners)",()->openCrop(frontUri,CROP_FRONT));
     addButton(root,"Manual crop BACK (4 corners)",()->openCrop(backUri,CROP_BACK));
     addButton(root,"Auto crop both photos",()->{if(!ready())return;Bitmap f=autoCrop(originalFront!=null?originalFront:front);Bitmap croppedBack=autoCrop(originalBack!=null?originalBack:back);boolean fc=f!=(originalFront!=null?originalFront:front),bc=croppedBack!=(originalBack!=null?originalBack:back);front=f;back=croppedBack;refresh();status.setText("Front: "+(fc?"cropped":"NOT detected")+" | Back: "+(bc?"cropped":"NOT detected")+". Use Manual Crop if not detected.");});
@@ -97,6 +99,14 @@ public class MainActivity extends Activity {
       refresh();
     }catch(Exception e){status.setText("Image error: "+e.getMessage());}
   }
+  void rotateCard(boolean isFront){
+    Bitmap src=isFront?front:back;
+    if(src==null){status.setText("Select a photo first.");return;}
+    Matrix rotation=new Matrix();rotation.postRotate(90);
+    Bitmap turned=Bitmap.createBitmap(src,0,0,src.getWidth(),src.getHeight(),rotation,true);
+    if(isFront)front=turned;else back=turned;
+    refresh();status.setText("Photo rotated. Check the A4 preview.");
+  }
   void updateSheet(){if(sheetPreview!=null)sheetPreview.invalidate();}
   void refresh(){updateSheet();frontView.setImageDrawable(null);backView.setImageDrawable(null);frontView.setImageBitmap(previewBitmap(front));backView.setImageBitmap(previewBitmap(back));frontView.invalidate();backView.invalidate();}
   boolean ready(){if(front==null||back==null){status.setText("Please select FRONT and BACK first.");return false;}return true;}
@@ -137,8 +147,9 @@ public class MainActivity extends Activity {
     pdf.finishPage(page);return pdf;
   }
   void drawSheet(Canvas c){
-    float cardW=242.65f,cardH=153.07f,gap=16f;
-    float x1=(595-(2*cardW+gap))/2,x2=x1+cardW+gap,top=12.5f,rowGap=12f;
+    float cardW=242.65f,cardH=153.07f,gap=32f;
+    // Wider 11.3 mm middle cutting gap; 5 rows still fit within A4.
+    float x1=(595-(2*cardW+gap))/2,x2=x1+cardW+gap,top=10f,rowGap=14f;
     for(int row=0;row<copyCount;row++){
       float y=top+row*(cardH+rowGap);
       if(front!=null)drawCard(c,front,x1,y,cardW,cardH);if(back!=null)drawCard(c,back,x2,y,cardW,cardH);
