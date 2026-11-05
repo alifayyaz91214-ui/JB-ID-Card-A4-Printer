@@ -14,7 +14,7 @@ import android.widget.*;
 import java.io.*;
 
 public class MainActivity extends Activity {
-  Bitmap front, back;
+  Bitmap front, back, originalFront, originalBack;
   Uri frontUri, backUri;
   ImageView frontView, backView;
   TextView status;
@@ -31,7 +31,7 @@ public class MainActivity extends Activity {
     addButton(root,"2. Select BACK photo",()->pick(PICK_BACK)); root.addView(backView);
     addButton(root,"Manual crop FRONT (4 corners)",()->openCrop(frontUri,CROP_FRONT));
     addButton(root,"Manual crop BACK (4 corners)",()->openCrop(backUri,CROP_BACK));
-    addButton(root,"Auto crop both photos",()->{if(!ready())return;front=autoCrop(front);back=autoCrop(back);refresh();status.setText("Auto crop applied. Check edges before printing.");});
+    addButton(root,"Auto crop both photos",()->{if(!ready())return;Bitmap f=autoCrop(originalFront!=null?originalFront:front);Bitmap b=autoCrop(originalBack!=null?originalBack:back);boolean fc=f!=(originalFront!=null?originalFront:front),bc=b!=(originalBack!=null?originalBack:back);front=f;back=b;refresh();status.setText("Front: "+(fc?"cropped":"NOT detected")+" | Back: "+(bc?"cropped":"NOT detected")+". Use Manual Crop if not detected.");});
     addButton(root,"Print A4 directly",()->{if(!ready())return;printSheet();});
     addButton(root,"Save A4 as PDF",()->{if(!ready())return;Intent i=new Intent(Intent.ACTION_CREATE_DOCUMENT);i.setType("application/pdf");i.addCategory(Intent.CATEGORY_OPENABLE);i.putExtra(Intent.EXTRA_TITLE,"JB-ID-Cards-A4.pdf");startActivityForResult(i,SAVE);});
     status=new TextView(this);status.setText("Select both photos. Print at actual size (100%).");status.setTextSize(15);root.addView(status);
@@ -53,13 +53,14 @@ public class MainActivity extends Activity {
       try(InputStream in=getContentResolver().openInputStream(data.getData())){bmp=BitmapFactory.decodeStream(in,null,opts);}
       if(bmp==null)throw new IOException("Image could not be decoded");
       if(request==PICK_FRONT)frontUri=data.getData();else if(request==PICK_BACK)backUri=data.getData();
+      if(request==PICK_FRONT)originalFront=bmp;else if(request==PICK_BACK)originalBack=bmp;
       Bitmap cropped=autoCrop(bmp);
       if(request==PICK_FRONT)front=cropped;else if(request==PICK_BACK)back=cropped;
-      status.setText(cropped==bmp ? "Card edges uncertain. Original kept; try a plain contrasting background." : "Automatic crop applied. Check preview before printing.");
+      status.setText(cropped==bmp ? "Auto detect FAILED: original photo kept. Use Manual Crop or a plain contrasting background." : "Auto crop changed the photo. Check preview before printing.");
       refresh();
     }catch(Exception e){status.setText("Image error: "+e.getMessage());}
   }
-  void refresh(){frontView.setImageBitmap(front);backView.setImageBitmap(back);}
+  void refresh(){frontView.setImageDrawable(null);backView.setImageDrawable(null);frontView.setImageBitmap(front);backView.setImageBitmap(back);frontView.invalidate();backView.invalidate();}
   boolean ready(){if(front==null||back==null){status.setText("Please select FRONT and BACK first.");return false;}return true;}
   // Detect a card on a contrasting, approximately uniform background.
   // Use multiple border samples and row/column foreground coverage rather than
