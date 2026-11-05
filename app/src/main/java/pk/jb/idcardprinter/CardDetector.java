@@ -19,14 +19,14 @@ public final class CardDetector {
       int outW=Math.min(2800,Math.max(1000,(int)Math.round((dist(original[0],original[1])+dist(original[3],original[2]))/2)));
       int outH=(int)Math.round(outW*54.0/85.6);
       MatOfPoint2f srcPts=new MatOfPoint2f(),dstPts=new MatOfPoint2f();
-      // Expand detected quadrilateral outward by 3% about its centre.
+      // Add a very small 0.5% edge safety margin (avoid surrounding fabric) about its centre.
       // Clamp to source bounds to avoid sampling outside the photo.
       double cx=0,cy=0;
       for(Point point:original){cx+=point.x;cy+=point.y;}
       cx/=4.0;cy/=4.0;
       for(Point point:original){
-        point.x=Math.max(0,Math.min(source.getWidth()-1,cx+(point.x-cx)*1.03));
-        point.y=Math.max(0,Math.min(source.getHeight()-1,cy+(point.y-cy)*1.03));
+        point.x=Math.max(0,Math.min(source.getWidth()-1,cx+(point.x-cx)*1.005));
+        point.y=Math.max(0,Math.min(source.getHeight()-1,cy+(point.y-cy)*1.005));
       }
       srcPts.fromArray(original);
       dstPts.fromArray(new Point(0,0),new Point(outW-1,0),new Point(outW-1,outH-1),new Point(0,outH-1));
@@ -47,30 +47,46 @@ public final class CardDetector {
       Imgproc.resize(rgba,small,new Size(),factor,factor,Imgproc.INTER_AREA);
       Imgproc.cvtColor(small,gray,Imgproc.COLOR_RGBA2GRAY);
       Imgproc.GaussianBlur(gray,gray,new Size(5,5),0);
-      Imgproc.Canny(gray,edges,45,125);
-      Imgproc.dilate(edges,edges,Imgproc.getStructuringElement(Imgproc.MORPH_RECT,new Size(3,3)));
-      List<MatOfPoint> contours=new ArrayList<>();
-      Imgproc.findContours(edges,contours,hierarchy,Imgproc.RETR_LIST,Imgproc.CHAIN_APPROX_SIMPLE);
-      Point[] best=null;double bestScore=0,frame=small.width()*small.height();
-      for(MatOfPoint contour:contours){
-        MatOfPoint2f curve=new MatOfPoint2f(contour.toArray()),approx=new MatOfPoint2f();
-        double perimeter=Imgproc.arcLength(curve,true);
-        Imgproc.approxPolyDP(curve,approx,.025*perimeter,true);
-        Point[] p=approx.toArray();
-        if(p.length==4 && Imgproc.isContourConvex(new MatOfPoint(p))){
-          double area=Math.abs(Imgproc.contourArea(new MatOfPoint(p)));
-          if(area<frame*.06||area>frame*.90)continue;
-          Point[] ordered=order(p);
-          double width=(dist(ordered[0],ordered[1])+dist(ordered[3],ordered[2]))/2;
-          double height=(dist(ordered[0],ordered[3])+dist(ordered[1],ordered[2]))/2;
-          double ratio=width/Math.max(1,height);
-          if(ratio<1.32||ratio>1.95)continue;
-          double score=area/frame - .18*Math.abs(ratio-85.6/54.0);
-          if(score>bestScore){bestScore=score;best=ordered;}
+      Point[] best=null;
+      double bestScore=-Double.MAX_VALUE;
+      double frame=small.width()*small.height();
+      // Try several edge sensitivities: textured backgrounds and pale card edges vary.
+      int[][] thresholds={{35,100},{55,150},{80,190}};
+      for(int[] threshold:thresholds){
+        Imgproc.Canny(gray,edges,threshold[0],threshold[1]);
+        Mat kernel=Imgproc.getStructuringElement(Imgproc.MORPH_RECT,new Size(3,3));
+        Imgproc.morphologyEx(edges,edges,Imgproc.MORPH_CLOSE,kernel);
+        kernel.release();
+        List<MatOfPoint> contours=new ArrayList<>();
+        Imgproc.findContours(edges,contours,hierarchy,Imgproc.RETR_LIST,Imgproc.CHAIN_APPROX_SIMPLE);
+        for(MatOfPoint contour:contours){
+          double area=Math.abs(Imgproc.contourArea(contour));
+          if(area<frame*.09||area>frame*.85)continue;
+          MatOfPoint2f curve=new MatOfPoint2f(contour.toArray()),approx=new MatOfPoint2f();
+          double perimeter=Imgproc.arcLength(curve,true);
+          Imgproc.approxPolyDP(curve,approx,.022*perimeter,true);
+          Point[] p=approx.toArray();
+          if(p.length==4){
+            MatOfPoint polygon=new MatOfPoint(p);
+            boolean convex=Imgproc.isContourConvex(polygon);
+            polygon.release();
+            if(convex){
+              Point[] ordered=order(p);
+              double width=(dist(ordered[0],ordered[1])+dist(ordered[3],ordered[2]))/2;
+              double height=(dist(ordered[0],ordered[3])+dist(ordered[1],ordered[2]))/2;
+              double ratio=width/Math.max(1,height);
+              double cx=(ordered[0].x+ordered[1].x+ordered[2].x+ordered[3].x)/4;
+              double cy=(ordered[0].y+ordered[1].y+ordered[2].y+ordered[3].y)/4;
+              if(ratio>=1.35&&ratio<=1.88 && cx>small.width()*.08&&cx<small.width()*.92 && cy>small.height()*.08&&cy<small.height()*.92){
+                double score=area/frame-.24*Math.abs(ratio-85.6/54.0);
+                if(score>bestScore){bestScore=score;best=ordered;}
+              }
+            }
+          }
+          curve.release();approx.release();
         }
-        curve.release();approx.release();
+        for(MatOfPoint contour:contours)contour.release();
       }
-      for(MatOfPoint c:contours)c.release();
       if(best==null)return null;
       Point[] original=new Point[4];
       for(int i=0;i<4;i++)original[i]=new Point(best[i].x/factor,best[i].y/factor);
