@@ -60,12 +60,12 @@ public class PassportActivity extends Activity {
     RadioGroup countGroup=new RadioGroup(this);countGroup.setOrientation(RadioGroup.HORIZONTAL);
     int[] counts={1,2,4,6};
     for(int count:counts){RadioButton rb=new RadioButton(this);rb.setText(""+count);rb.setId(500+count);countGroup.addView(rb);}
-    countGroup.check(506);countGroup.setOnCheckedChangeListener((g,id)->photoCount=id-500;updateSheet());root.addView(countGroup);
+    countGroup.check(506);countGroup.setOnCheckedChangeListener((g,id)->{photoCount=id-500;updateSheet();});root.addView(countGroup);
     TextView paperLabel=new TextView(this);paperLabel.setText("Paper size");paperLabel.setTextSize(17);root.addView(paperLabel);
     RadioGroup paper=new RadioGroup(this);paper.setOrientation(RadioGroup.HORIZONTAL);
     RadioButton fourR=new RadioButton(this);fourR.setId(710);fourR.setText("4R (4 x 6 inch)");paper.addView(fourR);
     RadioButton a4Option=new RadioButton(this);a4Option.setId(711);a4Option.setText("A4");paper.addView(a4Option);
-    paper.check(710);paper.setOnCheckedChangeListener((g,id)->a4=id==711;updateSheet());root.addView(paper);
+    paper.check(710);paper.setOnCheckedChangeListener((g,id)->{a4=id==711;updateSheet();});root.addView(paper);
     TextView enhanceLabel=new TextView(this);enhanceLabel.setText("Photo finishing - brightness");enhanceLabel.setTextSize(17);root.addView(enhanceLabel);
     SeekBar light=new SeekBar(this);light.setMax(100);light.setProgress(50);
     light.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener(){
