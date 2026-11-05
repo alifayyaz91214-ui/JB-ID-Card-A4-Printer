@@ -19,7 +19,8 @@ public class MainActivity extends Activity {
   ImageView frontView, backView;
   TextView status;
   boolean cvReady=false;
-  int printMode=0; // 0 original, 1 balanced grayscale, 2 stronger grayscale
+  int printMode=0; // 0 original, 1 balanced grayscale, 2 stronger grayscale, 3 dark text
+  int darkness=12;
   static final int PICK_FRONT=101, PICK_BACK=102, SAVE=103, CROP_FRONT=104, CROP_BACK=105;
   @Override public void onCreate(Bundle b) {
     super.onCreate(b);
@@ -37,10 +38,18 @@ public class MainActivity extends Activity {
     addButton(root,"Auto crop both photos",()->{if(!ready())return;Bitmap f=autoCrop(originalFront!=null?originalFront:front);Bitmap croppedBack=autoCrop(originalBack!=null?originalBack:back);boolean fc=f!=(originalFront!=null?originalFront:front),bc=croppedBack!=(originalBack!=null?originalBack:back);front=f;back=croppedBack;refresh();status.setText("Front: "+(fc?"cropped":"NOT detected")+" | Back: "+(bc?"cropped":"NOT detected")+". Use Manual Crop if not detected.");});
     TextView printLabel=new TextView(this);printLabel.setText("Print quality / color mode");printLabel.setTextSize(17);root.addView(printLabel);
     RadioGroup modes=new RadioGroup(this);modes.setOrientation(RadioGroup.VERTICAL);
-    String[] names={"Original Color","B&W Enhanced (recommended)","B&W High Contrast"};
+    String[] names={"Original Color","B&W Enhanced (recommended)","B&W High Contrast","Dark Text / Print Enhance"};
     for(int k=0;k<names.length;k++){final int mode=k;RadioButton rb=new RadioButton(this);rb.setText(names[k]);rb.setId(400+k);modes.addView(rb);}
     modes.check(400);modes.setOnCheckedChangeListener((group,id)->{printMode=id-400;refresh();status.setText("Preview and PDF will use selected print mode. Review fine text before printing.");});
     root.addView(modes);
+    TextView darknessLabel=new TextView(this);darknessLabel.setText("Text darkness: "+darkness+" (0-30)");root.addView(darknessLabel);
+    SeekBar darknessSlider=new SeekBar(this);darknessSlider.setMax(30);darknessSlider.setProgress(darkness);
+    darknessSlider.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener(){
+      public void onProgressChanged(SeekBar bar,int value,boolean fromUser){darkness=value;darknessLabel.setText("Text darkness: "+value+" (0-30)");if(fromUser&&printMode!=0)refresh();}
+      public void onStartTrackingTouch(SeekBar bar){}
+      public void onStopTrackingTouch(SeekBar bar){}
+    });
+    root.addView(darknessSlider);
     addButton(root,"Print A4 directly",()->{if(!ready())return;printSheet();});
     addButton(root,"Save A4 as PDF",()->{if(!ready())return;Intent i=new Intent(Intent.ACTION_CREATE_DOCUMENT);i.setType("application/pdf");i.addCategory(Intent.CATEGORY_OPENABLE);i.putExtra(Intent.EXTRA_TITLE,"JB-ID-Cards-A4.pdf");startActivityForResult(i,SAVE);});
     status=new TextView(this);status.setText("Select both photos. Print at actual size (100%).");status.setTextSize(15);root.addView(status);
@@ -82,8 +91,10 @@ public class MainActivity extends Activity {
     if(printMode==0)return paint;
     ColorMatrix gray=new ColorMatrix();gray.setSaturation(0);
     ColorMatrix contrast=new ColorMatrix();
-    float c=printMode==1?1.12f:1.30f;
-    float offset=printMode==1?7f:3f;
+    float c=printMode==1?1.12f:(printMode==2?1.30f:1.16f);
+    // Dark Text mode reduces excessive white and strengthens gray lettering.
+    // User-adjustable offset, without destructive binary thresholding.
+    float offset=printMode==1?7f:(printMode==2?3f:-darkness);
     float t=128f*(1f-c)+offset;
     contrast.set(new float[]{c,0,0,0,t, 0,c,0,0,t, 0,0,c,0,t, 0,0,0,1,0});
     gray.postConcat(contrast);
