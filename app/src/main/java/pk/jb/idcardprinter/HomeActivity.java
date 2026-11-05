@@ -102,6 +102,7 @@ public class HomeActivity extends Activity {
     TextView sub=text("Professional ID copies and passport photos, prepared on your phone.",15,false,Color.rgb(92,108,130));sub.setPadding(0,0,0,20);root.addView(sub);
     service(root,"01","ID Card A4 Printer","Auto crop, corner adjustment, print enhancement and 1-5 front/back copies.",MainActivity.class);
     service(root,"02","Passport Photo Studio","Country size presets, 1-6 prints, cutting margins and 4R PDF.",PassportActivity.class);
+    service(root,"03","A4 Photo Copy Studio","One photo, custom copy count, darker blacks, controlled whites and live A4 preview.",PhotoCopyActivity.class);
     TextView footer=text("LOCAL PROCESSING  •  NO ACCOUNT REQUIRED",12,true,Color.rgb(92,108,130));footer.setGravity(Gravity.CENTER);footer.setPadding(0,18,0,0);root.addView(footer);
     setContentView(scroll);
   }
