@@ -18,6 +18,7 @@ public class MainActivity extends Activity {
   Uri frontUri, backUri;
   ImageView frontView, backView;
   TextView status;
+  View sheetPreview;
   boolean cvReady=false;
   int printMode=0; // 0 original, 1 balanced grayscale, 2 stronger grayscale, 3 dark text
   int darkness=12;
@@ -29,6 +30,17 @@ public class MainActivity extends Activity {
     LinearLayout root=new LinearLayout(this); root.setOrientation(1); root.setPadding(28,30,28,36);root.setBackgroundColor(Color.rgb(244,247,252));
     ScrollView scroll=new ScrollView(this); scroll.addView(root); setContentView(scroll);
     TextView title=new TextView(this); title.setText("JB Mobile & PhotoState\nID Card A4 Printer"); title.setTextSize(24); title.setGravity(17); root.addView(title);
+    TextView previewTitle=new TextView(this);previewTitle.setText("LIVE A4 PRINT PREVIEW");previewTitle.setTextSize(17);previewTitle.setTextColor(Color.rgb(21,38,65));root.addView(previewTitle);
+    sheetPreview=new View(this){
+      Paint paper=new Paint(3);
+      @Override protected void onDraw(Canvas c){
+        super.onDraw(c);c.drawColor(Color.rgb(230,235,244));
+        float scale=Math.min((getWidth()-24f)/595f,(getHeight()-24f)/842f);
+        c.save();c.translate((getWidth()-595f*scale)/2f,(getHeight()-842f*scale)/2f);c.scale(scale,scale);
+        c.drawColor(Color.WHITE);drawSheet(c);c.restore();
+      }
+    };
+    LinearLayout.LayoutParams sheetParams=new LinearLayout.LayoutParams(-1,460);sheetParams.bottomMargin=18;root.addView(sheetPreview,sheetParams);
     frontView=new ImageView(this); backView=new ImageView(this);
     frontView.setAdjustViewBounds(true); backView.setAdjustViewBounds(true);
     frontView.setMinimumHeight(130); backView.setMinimumHeight(130);
@@ -55,7 +67,7 @@ public class MainActivity extends Activity {
     RadioGroup copies=new RadioGroup(this);copies.setOrientation(RadioGroup.HORIZONTAL);
     int[] copyOptions={1,2,4,5};
     for(int count:copyOptions){RadioButton rb=new RadioButton(this);rb.setId(600+count);rb.setText(""+count);copies.addView(rb);}
-    copies.check(605);copies.setOnCheckedChangeListener((g,id)->copyCount=id-600);root.addView(copies);
+    copies.check(605);copies.setOnCheckedChangeListener((g,id)->{copyCount=id-600;updateSheet();});root.addView(copies);
     addButton(root,"Print A4 directly",()->{if(!ready())return;printSheet();});
     addButton(root,"Save A4 as PDF",()->{if(!ready())return;Intent i=new Intent(Intent.ACTION_CREATE_DOCUMENT);i.setType("application/pdf");i.addCategory(Intent.CATEGORY_OPENABLE);i.putExtra(Intent.EXTRA_TITLE,"JB-ID-Cards-A4.pdf");startActivityForResult(i,SAVE);});
     status=new TextView(this);status.setText("Select both photos. Print at actual size (100%).");status.setTextSize(15);root.addView(status);
@@ -85,7 +97,8 @@ public class MainActivity extends Activity {
       refresh();
     }catch(Exception e){status.setText("Image error: "+e.getMessage());}
   }
-  void refresh(){frontView.setImageDrawable(null);backView.setImageDrawable(null);frontView.setImageBitmap(previewBitmap(front));backView.setImageBitmap(previewBitmap(back));frontView.invalidate();backView.invalidate();}
+  void updateSheet(){if(sheetPreview!=null)sheetPreview.invalidate();}
+  void refresh(){updateSheet();frontView.setImageDrawable(null);backView.setImageDrawable(null);frontView.setImageBitmap(previewBitmap(front));backView.setImageBitmap(previewBitmap(back));frontView.invalidate();backView.invalidate();}
   boolean ready(){if(front==null||back==null){status.setText("Please select FRONT and BACK first.");return false;}return true;}
   Bitmap autoCrop(Bitmap src){
     if(src==null||!cvReady)return src;
@@ -120,14 +133,16 @@ public class MainActivity extends Activity {
   // Front on left, back on right, repeated in 5 rows with cutting gaps.
   PdfDocument makePdf(){
     PdfDocument pdf=new PdfDocument();PdfDocument.PageInfo info=new PdfDocument.PageInfo.Builder(595,842,1).create();
-    PdfDocument.Page page=pdf.startPage(info);Canvas c=page.getCanvas();c.drawColor(Color.WHITE);
+    PdfDocument.Page page=pdf.startPage(info);Canvas c=page.getCanvas();c.drawColor(Color.WHITE);drawSheet(c);
+    pdf.finishPage(page);return pdf;
+  }
+  void drawSheet(Canvas c){
     float cardW=242.65f,cardH=153.07f,gap=16f;
     float x1=(595-(2*cardW+gap))/2,x2=x1+cardW+gap,top=12.5f,rowGap=12f;
     for(int row=0;row<copyCount;row++){
       float y=top+row*(cardH+rowGap);
-      drawCard(c,front,x1,y,cardW,cardH);drawCard(c,back,x2,y,cardW,cardH);
+      if(front!=null)drawCard(c,front,x1,y,cardW,cardH);if(back!=null)drawCard(c,back,x2,y,cardW,cardH);
     }
-    pdf.finishPage(page);return pdf;
   }
   void drawCard(Canvas c,Bitmap bmp,float x,float y,float w,float h){
     RectF r=new RectF(x,y,x+w,y+h);
