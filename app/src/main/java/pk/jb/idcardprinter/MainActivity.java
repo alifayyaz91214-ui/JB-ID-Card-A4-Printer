@@ -18,9 +18,11 @@ public class MainActivity extends Activity {
   Uri frontUri, backUri;
   ImageView frontView, backView;
   TextView status;
+  boolean cvReady=false;
   static final int PICK_FRONT=101, PICK_BACK=102, SAVE=103, CROP_FRONT=104, CROP_BACK=105;
   @Override public void onCreate(Bundle b) {
     super.onCreate(b);
+    try{cvReady=org.opencv.android.OpenCVLoader.initLocal();}catch(Throwable e){cvReady=false;}
     LinearLayout root=new LinearLayout(this); root.setOrientation(1); root.setPadding(24,24,24,24);
     ScrollView scroll=new ScrollView(this); scroll.addView(root); setContentView(scroll);
     TextView title=new TextView(this); title.setText("JB Mobile & PhotoState\nID Card A4 Printer"); title.setTextSize(24); title.setGravity(17); root.addView(title);
@@ -56,45 +58,16 @@ public class MainActivity extends Activity {
       if(request==PICK_FRONT)originalFront=bmp;else if(request==PICK_BACK)originalBack=bmp;
       Bitmap cropped=autoCrop(bmp);
       if(request==PICK_FRONT)front=cropped;else if(request==PICK_BACK)back=cropped;
-      status.setText(cropped==bmp ? "Auto detect FAILED: original photo kept. Use Manual Crop or a plain contrasting background." : "Auto crop changed the photo. Check preview before printing.");
+      status.setText(cropped==bmp ? "Auto detect did not find a reliable CNIC rectangle. Original kept; use Manual Crop." : "Auto crop changed the photo. Check preview before printing.");
       refresh();
     }catch(Exception e){status.setText("Image error: "+e.getMessage());}
   }
   void refresh(){frontView.setImageDrawable(null);backView.setImageDrawable(null);frontView.setImageBitmap(front);backView.setImageBitmap(back);frontView.invalidate();backView.invalidate();}
   boolean ready(){if(front==null||back==null){status.setText("Please select FRONT and BACK first.");return false;}return true;}
-  // Detect a card on a contrasting, approximately uniform background.
-  // Use multiple border samples and row/column foreground coverage rather than
-  // a single corner pixel. Refuse uncertain crops to avoid losing ID information.
   Bitmap autoCrop(Bitmap src){
-    int w=src.getWidth(),h=src.getHeight();
-    if(w<100||h<100)return src;
-    int[] samples=new int[]{src.getPixel(0,0),src.getPixel(w-1,0),src.getPixel(0,h-1),src.getPixel(w-1,h-1),
-      src.getPixel(w/2,0),src.getPixel(w/2,h-1),src.getPixel(0,h/2),src.getPixel(w-1,h/2)};
-    int[] r=new int[8],g=new int[8],b=new int[8];
-    for(int i=0;i<8;i++){r[i]=Color.red(samples[i]);g[i]=Color.green(samples[i]);b[i]=Color.blue(samples[i]);}
-    java.util.Arrays.sort(r);java.util.Arrays.sort(g);java.util.Arrays.sort(b);
-    int bgR=(r[3]+r[4])/2,bgG=(g[3]+g[4])/2,bgB=(b[3]+b[4])/2;
-    int scale=Math.max(1,Math.max(w,h)/700),gw=(w+scale-1)/scale,gh=(h+scale-1)/scale;
-    int[] row=new int[gh],col=new int[gw];
-    for(int gy=0;gy<gh;gy++)for(int gx=0;gx<gw;gx++){
-      int c=src.getPixel(Math.min(w-1,gx*scale),Math.min(h-1,gy*scale));
-      int diff=Math.abs(Color.red(c)-bgR)+Math.abs(Color.green(c)-bgG)+Math.abs(Color.blue(c)-bgB);
-      if(diff>90){row[gy]++;col[gx]++;}
-    }
-    int minY=0,maxY=gh-1,minX=0,maxX=gw-1;
-    int rowThreshold=Math.max(3,(int)(gw*.22)),colThreshold=Math.max(3,(int)(gh*.22));
-    while(minY<gh&&row[minY]<rowThreshold)minY++;
-    while(maxY>=0&&row[maxY]<rowThreshold)maxY--;
-    while(minX<gw&&col[minX]<colThreshold)minX++;
-    while(maxX>=0&&col[maxX]<colThreshold)maxX--;
-    if(minX>=maxX||minY>=maxY)return src;
-    int x=Math.max(0,minX*scale-6*scale),y=Math.max(0,minY*scale-6*scale);
-    int right=Math.min(w,(maxX+1)*scale+6*scale),bottom=Math.min(h,(maxY+1)*scale+6*scale);
-    int cw=right-x,ch=bottom-y;
-    if(cw<w*.38||ch<h*.30||cw*ch>w*h*.96)return src;
-    float ratio=(float)cw/ch;
-    if(ratio<1.15f||ratio>2.35f)return src;
-    return Bitmap.createBitmap(src,x,y,cw,ch);
+    if(src==null||!cvReady)return src;
+    try{Bitmap cropped=CardDetector.detect(src);return cropped==null?src:cropped;}
+    catch(Exception e){return src;}
   }
   // A4 at 72dpi: 595 x 842 points. Each card is 85.6 x 54mm.
   // Front on left, back on right, repeated in 5 rows with cutting gaps.
