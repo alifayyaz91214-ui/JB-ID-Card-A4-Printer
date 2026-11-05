@@ -17,7 +17,7 @@ public class PassportActivity extends Activity {
   Bitmap photo;
   int photoCount=6;
   int sizeIndex=0;
-  final String[] sizeNames={"Pakistan / UK standard - 35 x 45 mm","USA / India - 51 x 51 mm","EU common - 35 x 45 mm","Custom - 40 x 50 mm","Custom - 30 x 40 mm"};
+  final String[] sizeNames={"Pakistan commonly used / UK - 35 x 45 mm","USA / India - 51 x 51 mm","EU common - 35 x 45 mm","Custom - 40 x 50 mm","Custom - 30 x 40 mm"};
   final float[] widths={35,51,35,40,30}, heights={45,51,45,50,40};
   ImageView preview;
   TextView status;
@@ -47,7 +47,18 @@ public class PassportActivity extends Activity {
     Button print=new Button(this);print.setText("Print 4R directly");root.addView(print);print.setOnClickListener(v->{if(ready())printSheet();});
     status=new TextView(this);status.setText("Select a photo to begin.");root.addView(status);
   }
-  boolean ready(){if(photo==null){status.setText("Select a portrait first.");return false;}return true;}
+  boolean ready(){
+    if(photo==null){status.setText("Select a portrait first.");return false;}
+    float w=widths[sizeIndex]*72/25.4f,h=heights[sizeIndex]*72/25.4f;
+    float gapX=14f,gapY=photoCount==6?9f:14f;
+    int cols=2*w+gapX<=277f?2:1;
+    int rows=(photoCount+cols-1)/cols;
+    if(rows*h+(rows-1)*gapY>419f){
+      status.setText("Selected quantity does not fit on 4R at this size. Choose fewer photos. Image dimensions will not be reduced.");
+      return false;
+    }
+    return true;
+  }
   @Override protected void onActivityResult(int req,int result,Intent data){
     super.onActivityResult(req,result,data);
     if(result!=RESULT_OK||data==null||data.getData()==null)return;
