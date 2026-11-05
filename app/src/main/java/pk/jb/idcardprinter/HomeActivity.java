@@ -17,5 +17,6 @@ public class HomeActivity extends Activity {
     cnic.setOnClickListener(v->startActivity(new Intent(this,MainActivity.class)));
     Button passport=new Button(this);passport.setText("2. Passport Photo Maker - 4R");root.addView(passport);
     passport.setOnClickListener(v->startActivity(new Intent(this,PassportActivity.class)));
+    setContentView(root);
   }
 }
