@@ -60,7 +60,7 @@ public final class CardDetector {
       double bestScore=-Double.MAX_VALUE;
       double frame=small.width()*small.height();
       // Try several edge sensitivities: textured backgrounds and pale card edges vary.
-      int[][] thresholds={{35,100},{55,150},{80,190}};
+      int[][] thresholds={{18,55},{30,85},{35,100},{55,150},{80,190}};
       for(int[] threshold:thresholds){
         Imgproc.Canny(gray,edges,threshold[0],threshold[1]);
         Mat kernel=Imgproc.getStructuringElement(Imgproc.MORPH_RECT,new Size(3,3));
@@ -70,7 +70,7 @@ public final class CardDetector {
         Imgproc.findContours(edges,contours,hierarchy,Imgproc.RETR_LIST,Imgproc.CHAIN_APPROX_SIMPLE);
         for(MatOfPoint contour:contours){
           double area=Math.abs(Imgproc.contourArea(contour));
-          if(area<frame*.09||area>frame*.85)continue;
+          if(area<frame*.008||area>frame*.85)continue;
           MatOfPoint2f curve=new MatOfPoint2f(contour.toArray()),approx=new MatOfPoint2f();
           double perimeter=Imgproc.arcLength(curve,true);
           Imgproc.approxPolyDP(curve,approx,.022*perimeter,true);
@@ -88,7 +88,7 @@ public final class CardDetector {
               double cy=(ordered[0].y+ordered[1].y+ordered[2].y+ordered[3].y)/4;
               if(((ratio>=1.35&&ratio<=1.88)||(ratio>=.53&&ratio<=.74)) && cx>small.width()*.08&&cx<small.width()*.92 && cy>small.height()*.08&&cy<small.height()*.92){
                 double normalizedRatio=ratio>=1?ratio:1.0/ratio;
-                double score=area/frame-.24*Math.abs(normalizedRatio-85.6/54.0);
+                double score=Math.sqrt(area/frame)-.45*Math.abs(normalizedRatio-85.6/54.0);
                 if(score>bestScore){bestScore=score;best=ordered;}
               }
             }
