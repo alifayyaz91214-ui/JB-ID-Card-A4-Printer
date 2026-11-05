@@ -17,6 +17,9 @@ public class PassportActivity extends Activity {
   Bitmap photo;
   int photoCount=6;
   int sizeIndex=0;
+  boolean a4=false;
+  int brightness=0;
+  int contrast=100;
   final String[] sizeNames={"Pakistan commonly used / UK - 35 x 45 mm","USA / India - 51 x 51 mm","EU common - 35 x 45 mm","Custom - 40 x 50 mm","Custom - 30 x 40 mm"};
   final float[] widths={35,51,35,40,30}, heights={45,51,45,50,40};
   ImageView preview;
@@ -41,9 +44,28 @@ public class PassportActivity extends Activity {
     int[] counts={1,2,4,6};
     for(int count:counts){RadioButton rb=new RadioButton(this);rb.setText(""+count);rb.setId(500+count);countGroup.addView(rb);}
     countGroup.check(506);countGroup.setOnCheckedChangeListener((g,id)->photoCount=id-500);root.addView(countGroup);
+    TextView paperLabel=new TextView(this);paperLabel.setText("Paper size");paperLabel.setTextSize(17);root.addView(paperLabel);
+    RadioGroup paper=new RadioGroup(this);paper.setOrientation(RadioGroup.HORIZONTAL);
+    RadioButton fourR=new RadioButton(this);fourR.setId(710);fourR.setText("4R (4 x 6 inch)");paper.addView(fourR);
+    RadioButton a4Option=new RadioButton(this);a4Option.setId(711);a4Option.setText("A4");paper.addView(a4Option);
+    paper.check(710);paper.setOnCheckedChangeListener((g,id)->a4=id==711);root.addView(paper);
+    TextView enhanceLabel=new TextView(this);enhanceLabel.setText("Photo finishing - brightness");enhanceLabel.setTextSize(17);root.addView(enhanceLabel);
+    SeekBar light=new SeekBar(this);light.setMax(100);light.setProgress(50);
+    light.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener(){
+      public void onProgressChanged(SeekBar bar,int value,boolean user){brightness=value-50;if(user)refreshPreview();}
+      public void onStartTrackingTouch(SeekBar bar){}
+      public void onStopTrackingTouch(SeekBar bar){}
+    });root.addView(light);
+    TextView contrastLabel=new TextView(this);contrastLabel.setText("Photo finishing - contrast");root.addView(contrastLabel);
+    SeekBar contrastBar=new SeekBar(this);contrastBar.setMax(160);contrastBar.setProgress(100);
+    contrastBar.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener(){
+      public void onProgressChanged(SeekBar bar,int value,boolean user){contrast=value;if(user)refreshPreview();}
+      public void onStartTrackingTouch(SeekBar bar){}
+      public void onStopTrackingTouch(SeekBar bar){}
+    });root.addView(contrastBar);
     TextView fitting=new TextView(this);fitting.setText("Larger sizes may fit fewer photos on 4R. The PDF will never shrink the selected physical photo size.");root.addView(fitting);
     Button pdf=new Button(this);pdf.setText("Save 4R PDF");root.addView(pdf);
-    pdf.setOnClickListener(v->{if(!ready())return;Intent i=new Intent(Intent.ACTION_CREATE_DOCUMENT);i.setType("application/pdf");i.addCategory(Intent.CATEGORY_OPENABLE);i.putExtra(Intent.EXTRA_TITLE,"JB-Passport-Photos-4R.pdf");startActivityForResult(i,SAVE);});
+    pdf.setOnClickListener(v->{if(!ready())return;Intent i=new Intent(Intent.ACTION_CREATE_DOCUMENT);i.setType("application/pdf");i.addCategory(Intent.CATEGORY_OPENABLE);i.putExtra(Intent.EXTRA_TITLE,a4?"JB-Passport-Photos-A4.pdf":"JB-Passport-Photos-4R.pdf");startActivityForResult(i,SAVE);});
     Button print=new Button(this);print.setText("Print 4R directly");root.addView(print);print.setOnClickListener(v->{if(ready())printSheet();});
     status=new TextView(this);status.setText("Select a photo to begin.");root.addView(status);
   }
@@ -53,7 +75,10 @@ public class PassportActivity extends Activity {
     float gapX=14f,gapY=photoCount==6?9f:14f;
     int cols=2*w+gapX<=277f?2:1;
     int rows=(photoCount+cols-1)/cols;
-    if(rows*h+(rows-1)*gapY>419f){
+    float pageW=a4?595f:289f,pageH=a4?842f:431f;
+    cols=(int)Math.max(1,Math.floor((pageW-24f+gapX)/(w+gapX)));
+    rows=(photoCount+cols-1)/cols;
+    if(rows*h+(rows-1)*gapY>pageH-24f){
       status.setText("Selected quantity does not fit on 4R at this size. Choose fewer photos. Image dimensions will not be reduced.");
       return false;
     }
@@ -70,23 +95,36 @@ public class PassportActivity extends Activity {
       o.inJustDecodeBounds=false;
       try(InputStream in=getContentResolver().openInputStream(data.getData())){photo=BitmapFactory.decodeStream(in,null,o);}
       if(photo==null)throw new IOException("Invalid image");
-      preview.setImageBitmap(photo);status.setText("Photo loaded. Check face position before printing.");
+      refreshPreview();status.setText("Photo loaded. Check face position before printing.");
     }catch(Exception e){status.setText("Photo error: "+e.getMessage());}}
+  }
+  Paint finishingPaint(){
+    Paint p=new Paint(Paint.ANTI_ALIAS_FLAG|Paint.FILTER_BITMAP_FLAG|Paint.DITHER_FLAG);
+    float c=contrast/100f,offset=128f*(1f-c)+brightness;
+    ColorMatrix matrix=new ColorMatrix(new float[]{c,0,0,0,offset,0,c,0,0,offset,0,0,c,0,offset,0,0,0,1,0});
+    p.setColorFilter(new ColorMatrixColorFilter(matrix));return p;
+  }
+  void refreshPreview(){
+    if(photo==null)return;
+    float factor=Math.min(1f,800f/Math.max(photo.getWidth(),photo.getHeight()));
+    int w=Math.max(1,Math.round(photo.getWidth()*factor)),h=Math.max(1,Math.round(photo.getHeight()*factor));
+    Bitmap output=Bitmap.createBitmap(w,h,Bitmap.Config.ARGB_8888);
+    Canvas c=new Canvas(output);c.drawBitmap(photo,null,new Rect(0,0,w,h),finishingPaint());preview.setImageBitmap(output);
   }
   // PDF points at 72 dpi: 4R portrait = 102 x 152 mm; photo = 35 x 45 mm.
   PdfDocument makePdf(){
-    int pageW=289,pageH=431;
+    int pageW=a4?595:289,pageH=a4?842:431;
     PdfDocument doc=new PdfDocument();PdfDocument.Page page=doc.startPage(new PdfDocument.PageInfo.Builder(pageW,pageH,1).create());
     Canvas canvas=page.getCanvas();canvas.drawColor(Color.WHITE);
     float w=widths[sizeIndex]*72/25.4f,h=heights[sizeIndex]*72/25.4f;
     float gapX=14f,gapY=photoCount==6?9f:14f;
-    int cols=(2*w+gapX<=pageW-12f)?2:1;
+    int cols=Math.max(1,(int)Math.floor((pageW-24f+gapX)/(w+gapX)));
     int rows=(photoCount+cols-1)/cols;
     int maxRows=Math.max(1,(int)Math.floor((pageH-12f+gapY)/(h+gapY)));
     int visibleCount=Math.min(photoCount,cols*maxRows);
     rows=(visibleCount+cols-1)/cols;
     float left=(pageW-(cols*w+(cols-1)*gapX))/2f,top=(pageH-(rows*h+(rows-1)*gapY))/2f;
-    Paint imagePaint=new Paint(Paint.ANTI_ALIAS_FLAG|Paint.FILTER_BITMAP_FLAG);
+    Paint imagePaint=finishingPaint();
     Paint border=new Paint(3);border.setColor(Color.BLACK);border.setStrokeWidth(.65f);border.setStyle(Paint.Style.STROKE);
     for(int row=0;row<rows;row++)for(int col=0;col<cols;col++){
       if(row*cols+col>=visibleCount)continue;
@@ -111,6 +149,6 @@ public class PassportActivity extends Activity {
         try(FileOutputStream out=new FileOutputStream(destination.getFileDescriptor())){PdfDocument doc=makePdf();doc.writeTo(out);doc.close();callback.onWriteFinished(new PageRange[]{PageRange.ALL_PAGES});}
         catch(Exception e){callback.onWriteFailed(e.getMessage());}
       }
-    },new PrintAttributes.Builder().setMediaSize(new PrintAttributes.MediaSize("JB_4R","4R 102 x 152 mm",4016,5984)).setColorMode(PrintAttributes.COLOR_MODE_COLOR).build());
+    },new PrintAttributes.Builder().setMediaSize(a4?PrintAttributes.MediaSize.ISO_A4:new PrintAttributes.MediaSize("JB_4R","4R 102 x 152 mm",4016,5984)).setColorMode(PrintAttributes.COLOR_MODE_COLOR).build());
   }
 }
