@@ -121,20 +121,24 @@ public class MainActivity extends Activity {
   PdfDocument makePdf(){
     PdfDocument pdf=new PdfDocument();PdfDocument.PageInfo info=new PdfDocument.PageInfo.Builder(595,842,1).create();
     PdfDocument.Page page=pdf.startPage(info);Canvas c=page.getCanvas();c.drawColor(Color.WHITE);
-    Paint p=new Paint(3);p.setColor(Color.BLACK);p.setStyle(Paint.Style.STROKE);p.setStrokeWidth(.65f);
     float cardW=242.65f,cardH=153.07f,gap=16f;
     float x1=(595-(2*cardW+gap))/2,x2=x1+cardW+gap,top=12.5f,rowGap=12f;
     for(int row=0;row<copyCount;row++){
       float y=top+row*(cardH+rowGap);
-      drawCard(c,front,x1,y,cardW,cardH,p);drawCard(c,back,x2,y,cardW,cardH,p);
+      drawCard(c,front,x1,y,cardW,cardH);drawCard(c,back,x2,y,cardW,cardH);
     }
     pdf.finishPage(page);return pdf;
   }
-  void drawCard(Canvas c,Bitmap bmp,float x,float y,float w,float h,Paint border){
+  void drawCard(Canvas c,Bitmap bmp,float x,float y,float w,float h){
     RectF r=new RectF(x,y,x+w,y+h);
-    Paint fill=qualityPaint();
-    c.drawBitmap(bmp,null,r,fill);
-    c.drawRect(r,border);
+    // Slightly rounded physical card corners (2 mm); no artificial black outline.
+    float radius=2f*72f/25.4f;
+    Path rounded=new Path();
+    rounded.addRoundRect(r,radius,radius,Path.Direction.CW);
+    c.save();
+    c.clipPath(rounded);
+    c.drawBitmap(bmp,null,r,qualityPaint());
+    c.restore();
   }
   void printSheet(){
     PrintManager manager=(PrintManager)getSystemService(PRINT_SERVICE);
