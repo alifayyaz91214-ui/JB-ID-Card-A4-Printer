@@ -16,6 +16,9 @@ public class PassportActivity extends Activity {
   static final int PICK=201,SAVE=202;
   Bitmap photo;
   int photoCount=6;
+  int sizeIndex=0;
+  final String[] sizeNames={"Pakistan / UK standard - 35 x 45 mm","USA / India - 51 x 51 mm","EU common - 35 x 45 mm","Custom - 40 x 50 mm","Custom - 30 x 40 mm"};
+  final float[] widths={35,51,35,40,30}, heights={45,51,45,50,40};
   ImageView preview;
   TextView status;
   @Override public void onCreate(Bundle b){
@@ -27,11 +30,18 @@ public class PassportActivity extends Activity {
     pick.setOnClickListener(v->{Intent i=new Intent(Intent.ACTION_GET_CONTENT);i.setType("image/*");startActivityForResult(i,PICK);});
     preview=new ImageView(this);preview.setAdjustViewBounds(true);preview.setMinimumHeight(200);root.addView(preview);
     TextView note=new TextView(this);note.setText("Choose 1, 2, 4 or 6 portraits (35 x 45 mm each), with white cutting gaps and thin borders. Use a front-facing, properly lit photo with a plain background. Crop is centered; review before printing.");root.addView(note);
+    TextView sizeLabel=new TextView(this);sizeLabel.setText("Photo size preset (confirm official application rules)");root.addView(sizeLabel);
+    Spinner sizes=new Spinner(this);ArrayAdapter<String> sizeAdapter=new ArrayAdapter<>(this,android.R.layout.simple_spinner_dropdown_item,sizeNames);sizes.setAdapter(sizeAdapter);
+    sizes.setOnItemSelectedListener(new android.widget.AdapterView.OnItemSelectedListener(){
+      public void onItemSelected(android.widget.AdapterView<?> parent,View view,int position,long id){sizeIndex=position;}
+      public void onNothingSelected(android.widget.AdapterView<?> parent){}
+    });root.addView(sizes);
     TextView countLabel=new TextView(this);countLabel.setText("Photos per 4R sheet");countLabel.setTextSize(17);root.addView(countLabel);
     RadioGroup countGroup=new RadioGroup(this);countGroup.setOrientation(RadioGroup.HORIZONTAL);
     int[] counts={1,2,4,6};
     for(int count:counts){RadioButton rb=new RadioButton(this);rb.setText(""+count);rb.setId(500+count);countGroup.addView(rb);}
     countGroup.check(506);countGroup.setOnCheckedChangeListener((g,id)->photoCount=id-500);root.addView(countGroup);
+    TextView fitting=new TextView(this);fitting.setText("Larger sizes may fit fewer photos on 4R. The PDF will never shrink the selected physical photo size.");root.addView(fitting);
     Button pdf=new Button(this);pdf.setText("Save 4R PDF");root.addView(pdf);
     pdf.setOnClickListener(v->{if(!ready())return;Intent i=new Intent(Intent.ACTION_CREATE_DOCUMENT);i.setType("application/pdf");i.addCategory(Intent.CATEGORY_OPENABLE);i.putExtra(Intent.EXTRA_TITLE,"JB-Passport-Photos-4R.pdf");startActivityForResult(i,SAVE);});
     Button print=new Button(this);print.setText("Print 4R directly");root.addView(print);print.setOnClickListener(v->{if(ready())printSheet();});
@@ -57,14 +67,18 @@ public class PassportActivity extends Activity {
     int pageW=289,pageH=431;
     PdfDocument doc=new PdfDocument();PdfDocument.Page page=doc.startPage(new PdfDocument.PageInfo.Builder(pageW,pageH,1).create());
     Canvas canvas=page.getCanvas();canvas.drawColor(Color.WHITE);
-    float w=35f*72/25.4f,h=45f*72/25.4f;
+    float w=widths[sizeIndex]*72/25.4f,h=heights[sizeIndex]*72/25.4f;
     float gapX=14f,gapY=photoCount==6?9f:14f;
-    int rows=(photoCount+1)/2;
-    float left=(pageW-(2*w+gapX))/2f,top=(pageH-(rows*h+(rows-1)*gapY))/2f;
+    int cols=(2*w+gapX<=pageW-12f)?2:1;
+    int rows=(photoCount+cols-1)/cols;
+    int maxRows=Math.max(1,(int)Math.floor((pageH-12f+gapY)/(h+gapY)));
+    int visibleCount=Math.min(photoCount,cols*maxRows);
+    rows=(visibleCount+cols-1)/cols;
+    float left=(pageW-(cols*w+(cols-1)*gapX))/2f,top=(pageH-(rows*h+(rows-1)*gapY))/2f;
     Paint imagePaint=new Paint(Paint.ANTI_ALIAS_FLAG|Paint.FILTER_BITMAP_FLAG);
     Paint border=new Paint(3);border.setColor(Color.BLACK);border.setStrokeWidth(.65f);border.setStyle(Paint.Style.STROKE);
-    for(int row=0;row<rows;row++)for(int col=0;col<2;col++){
-      if(row*2+col>=photoCount)continue;
+    for(int row=0;row<rows;row++)for(int col=0;col<cols;col++){
+      if(row*cols+col>=visibleCount)continue;
       float x=left+col*(w+gapX),y=top+row*(h+gapY);
       RectF target=new RectF(x,y,x+w,y+h);
       float desired=w/h,ratio=(float)photo.getWidth()/photo.getHeight();
