@@ -47,6 +47,15 @@ public final class CardDetector {
       MatOfPoint2f srcPts=new MatOfPoint2f(),dstPts=new MatOfPoint2f();
       Point[] original=new Point[4];
       for(int i=0;i<4;i++)original[i]=new Point(best[i].x/factor,best[i].y/factor);
+      // Expand detected quadrilateral outward by 3% about its centre.
+      // Clamp to source bounds to avoid sampling outside the photo.
+      double cx=0,cy=0;
+      for(Point point:original){cx+=point.x;cy+=point.y;}
+      cx/=4.0;cy/=4.0;
+      for(Point point:original){
+        point.x=Math.max(0,Math.min(source.getWidth()-1,cx+(point.x-cx)*1.03));
+        point.y=Math.max(0,Math.min(source.getHeight()-1,cy+(point.y-cy)*1.03));
+      }
       srcPts.fromArray(original);
       dstPts.fromArray(new Point(0,0),new Point(outW-1,0),new Point(outW-1,outH-1),new Point(0,outH-1));
       Mat transform=Imgproc.getPerspectiveTransform(srcPts,dstPts),output=new Mat();
