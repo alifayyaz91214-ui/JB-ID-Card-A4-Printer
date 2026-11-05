@@ -15,17 +15,22 @@ import java.io.*;
 public class PassportActivity extends Activity {
   static final int PICK=201,SAVE=202;
   Bitmap photo;
+  int photoCount=6;
   ImageView preview;
   TextView status;
   @Override public void onCreate(Bundle b){
     super.onCreate(b);
     LinearLayout root=new LinearLayout(this);root.setOrientation(1);root.setPadding(24,24,24,24);
     ScrollView scroll=new ScrollView(this);scroll.addView(root);setContentView(scroll);
-    TextView title=new TextView(this);title.setText("JB Passport Photo Maker\n4 photos on 4R (102 x 152 mm)");title.setTextSize(22);title.setGravity(Gravity.CENTER);root.addView(title);
+    TextView title=new TextView(this);title.setText("JB Passport Photo Maker\n4 or 6 photos on 4R (102 x 152 mm)");title.setTextSize(22);title.setGravity(Gravity.CENTER);root.addView(title);
     Button pick=new Button(this);pick.setText("Select portrait from gallery");root.addView(pick);
     pick.setOnClickListener(v->{Intent i=new Intent(Intent.ACTION_GET_CONTENT);i.setType("image/*");startActivityForResult(i,PICK);});
     preview=new ImageView(this);preview.setAdjustViewBounds(true);preview.setMinimumHeight(200);root.addView(preview);
     TextView note=new TextView(this);note.setText("Four 35 x 45 mm portraits, white background, cutting gaps and thin borders. Use a front-facing, properly lit photo with a plain background. Crop is centered; review before printing.");root.addView(note);
+    RadioGroup countGroup=new RadioGroup(this);countGroup.setOrientation(RadioGroup.HORIZONTAL);
+    RadioButton four=new RadioButton(this);four.setText("4 photos");four.setId(501);countGroup.addView(four);
+    RadioButton six=new RadioButton(this);six.setText("6 photos");six.setId(502);countGroup.addView(six);
+    countGroup.check(502);countGroup.setOnCheckedChangeListener((g,id)->photoCount=id==501?4:6);root.addView(countGroup);
     Button pdf=new Button(this);pdf.setText("Save 4R PDF");root.addView(pdf);
     pdf.setOnClickListener(v->{if(!ready())return;Intent i=new Intent(Intent.ACTION_CREATE_DOCUMENT);i.setType("application/pdf");i.addCategory(Intent.CATEGORY_OPENABLE);i.putExtra(Intent.EXTRA_TITLE,"JB-Passport-Photos-4R.pdf");startActivityForResult(i,SAVE);});
     Button print=new Button(this);print.setText("Print 4R directly");root.addView(print);print.setOnClickListener(v->{if(ready())printSheet();});
@@ -52,11 +57,12 @@ public class PassportActivity extends Activity {
     PdfDocument doc=new PdfDocument();PdfDocument.Page page=doc.startPage(new PdfDocument.PageInfo.Builder(pageW,pageH,1).create());
     Canvas canvas=page.getCanvas();canvas.drawColor(Color.WHITE);
     float w=35f*72/25.4f,h=45f*72/25.4f;
-    float gapX=14f,gapY=14f;
-    float left=(pageW-(2*w+gapX))/2f,top=40f;
+    float gapX=14f,gapY=photoCount==6?5f:14f;
+    int rows=photoCount/2;
+    float left=(pageW-(2*w+gapX))/2f,top=(pageH-(rows*h+(rows-1)*gapY))/2f;
     Paint imagePaint=new Paint(Paint.ANTI_ALIAS_FLAG|Paint.FILTER_BITMAP_FLAG);
     Paint border=new Paint(3);border.setColor(Color.BLACK);border.setStrokeWidth(.65f);border.setStyle(Paint.Style.STROKE);
-    for(int row=0;row<2;row++)for(int col=0;col<2;col++){
+    for(int row=0;row<rows;row++)for(int col=0;col<2;col++){
       float x=left+col*(w+gapX),y=top+row*(h+gapY);
       RectF target=new RectF(x,y,x+w,y+h);
       float desired=w/h,ratio=(float)photo.getWidth()/photo.getHeight();
