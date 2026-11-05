@@ -105,8 +105,8 @@ public class MainActivity extends Activity {
     PdfDocument pdf=new PdfDocument();PdfDocument.PageInfo info=new PdfDocument.PageInfo.Builder(595,842,1).create();
     PdfDocument.Page page=pdf.startPage(info);Canvas c=page.getCanvas();c.drawColor(Color.WHITE);
     Paint p=new Paint(3);p.setColor(Color.BLACK);p.setStyle(Paint.Style.STROKE);p.setStrokeWidth(.65f);
-    float cardW=242.65f,cardH=153.07f,gap=12f;
-    float x1=(595-(2*cardW+gap))/2,x2=x1+cardW+gap,top=16f,rowGap=10f;
+    float cardW=242.65f,cardH=153.07f,gap=16f;
+    float x1=(595-(2*cardW+gap))/2,x2=x1+cardW+gap,top=12.5f,rowGap=12f;
     for(int row=0;row<5;row++){
       float y=top+row*(cardH+rowGap);
       drawCard(c,front,x1,y,cardW,cardH,p);drawCard(c,back,x2,y,cardW,cardH,p);
