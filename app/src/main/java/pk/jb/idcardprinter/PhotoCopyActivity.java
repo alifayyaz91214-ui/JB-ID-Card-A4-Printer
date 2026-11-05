@@ -129,9 +129,9 @@ public class PhotoCopyActivity extends Activity {
     if(request==SAVE){try(OutputStream out=getContentResolver().openOutputStream(data.getData())){PdfDocument d=makePdf();d.writeTo(out);d.close();status.setText("A4 PDF saved.");}catch(Exception e){status.setText("Save error: "+e.getMessage());}return;}
     if(request==PICK||request==CAMERA){try{
       BitmapFactory.Options o=new BitmapFactory.Options();o.inJustDecodeBounds=true;
-      try(InputStream in=getContentResolver().openInputStream(data.getData())){BitmapFactory.decodeStream(in,null,o);}
+      try(InputStream in=getContentResolver().openInputStream(selected)){BitmapFactory.decodeStream(in,null,o);}
       o.inSampleSize=1;while(Math.max(o.outWidth/o.inSampleSize,o.outHeight/o.inSampleSize)>2600)o.inSampleSize*=2;o.inJustDecodeBounds=false;
-      try(InputStream in=getContentResolver().openInputStream(data.getData())){photo=BitmapFactory.decodeStream(in,null,o);}
+      try(InputStream in=getContentResolver().openInputStream(selected)){photo=BitmapFactory.decodeStream(in,null,o);}
       if(photo==null)throw new IOException("Cannot read photo");
       // Respect camera/gallery EXIF orientation before composing the A4 sheet.
       try(InputStream exifStream=getContentResolver().openInputStream(selected)){
