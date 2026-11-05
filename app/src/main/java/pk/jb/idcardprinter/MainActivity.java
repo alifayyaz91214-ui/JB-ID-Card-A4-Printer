@@ -47,29 +47,47 @@ public class MainActivity extends Activity {
       Bitmap bmp;
       try(InputStream in=getContentResolver().openInputStream(data.getData())){bmp=BitmapFactory.decodeStream(in,null,opts);}
       if(bmp==null)throw new IOException("Image could not be decoded");
-      if(request==PICK_FRONT)front=bmp;else if(request==PICK_BACK)back=bmp;
+      Bitmap cropped=autoCrop(bmp);
+      if(request==PICK_FRONT)front=cropped;else if(request==PICK_BACK)back=cropped;
+      status.setText(cropped==bmp ? "Card edges uncertain. Original kept; try a plain contrasting background." : "Automatic crop applied. Check preview before printing.");
       refresh();
     }catch(Exception e){status.setText("Image error: "+e.getMessage());}
   }
   void refresh(){frontView.setImageBitmap(front);backView.setImageBitmap(back);}
   boolean ready(){if(front==null||back==null){status.setText("Please select FRONT and BACK first.");return false;}return true;}
-  // Conservative automatic rectangular trimming based on difference from corner background.
-  // This is an approximate crop, not a perspective-corrected document scanner.
+  // Detect a card on a contrasting, approximately uniform background.
+  // Use multiple border samples and row/column foreground coverage rather than
+  // a single corner pixel. Refuse uncertain crops to avoid losing ID information.
   Bitmap autoCrop(Bitmap src){
-    int w=src.getWidth(),h=src.getHeight();int bg=src.getPixel(0,0);
-    int minX=w,minY=h,maxX=0,maxY=0,step=Math.max(1,Math.min(w,h)/450);
-    int hits=0;
-    for(int y=0;y<h;y+=step)for(int x=0;x<w;x+=step){
-      int c=src.getPixel(x,y);
-      int d=Math.abs(Color.red(c)-Color.red(bg))+Math.abs(Color.green(c)-Color.green(bg))+Math.abs(Color.blue(c)-Color.blue(bg));
-      if(d>105){minX=Math.min(minX,x);minY=Math.min(minY,y);maxX=Math.max(maxX,x);maxY=Math.max(maxY,y);hits++;}
+    int w=src.getWidth(),h=src.getHeight();
+    if(w<100||h<100)return src;
+    int[] samples=new int[]{src.getPixel(0,0),src.getPixel(w-1,0),src.getPixel(0,h-1),src.getPixel(w-1,h-1),
+      src.getPixel(w/2,0),src.getPixel(w/2,h-1),src.getPixel(0,h/2),src.getPixel(w-1,h/2)};
+    int[] r=new int[8],g=new int[8],b=new int[8];
+    for(int i=0;i<8;i++){r[i]=Color.red(samples[i]);g[i]=Color.green(samples[i]);b[i]=Color.blue(samples[i]);}
+    java.util.Arrays.sort(r);java.util.Arrays.sort(g);java.util.Arrays.sort(b);
+    int bgR=(r[3]+r[4])/2,bgG=(g[3]+g[4])/2,bgB=(b[3]+b[4])/2;
+    int scale=Math.max(1,Math.max(w,h)/700),gw=(w+scale-1)/scale,gh=(h+scale-1)/scale;
+    int[] row=new int[gh],col=new int[gw];
+    for(int gy=0;gy<gh;gy++)for(int gx=0;gx<gw;gx++){
+      int c=src.getPixel(Math.min(w-1,gx*scale),Math.min(h-1,gy*scale));
+      int diff=Math.abs(Color.red(c)-bgR)+Math.abs(Color.green(c)-bgG)+Math.abs(Color.blue(c)-bgB);
+      if(diff>90){row[gy]++;col[gx]++;}
     }
-    if(hits<30||minX>=maxX||minY>=maxY)return src;
-    int cw=maxX-minX,ch=maxY-minY;
-    if(cw<w*.4||ch<h*.3)return src;
-    int pad=Math.max(2,Math.min(w,h)/100);
-    int left=Math.max(0,minX-pad),top=Math.max(0,minY-pad);
-    return Bitmap.createBitmap(src,left,top,Math.min(w-left,cw+2*pad),Math.min(h-top,ch+2*pad));
+    int minY=0,maxY=gh-1,minX=0,maxX=gw-1;
+    int rowThreshold=Math.max(3,(int)(gw*.22)),colThreshold=Math.max(3,(int)(gh*.22));
+    while(minY<gh&&row[minY]<rowThreshold)minY++;
+    while(maxY>=0&&row[maxY]<rowThreshold)maxY--;
+    while(minX<gw&&col[minX]<colThreshold)minX++;
+    while(maxX>=0&&col[maxX]<colThreshold)maxX--;
+    if(minX>=maxX||minY>=maxY)return src;
+    int x=Math.max(0,minX*scale-6*scale),y=Math.max(0,minY*scale-6*scale);
+    int right=Math.min(w,(maxX+1)*scale+6*scale),bottom=Math.min(h,(maxY+1)*scale+6*scale);
+    int cw=right-x,ch=bottom-y;
+    if(cw<w*.38||ch<h*.30||cw*ch>w*h*.96)return src;
+    float ratio=(float)cw/ch;
+    if(ratio<1.15f||ratio>2.35f)return src;
+    return Bitmap.createBitmap(src,x,y,cw,ch);
   }
   // A4 at 72dpi: 595 x 842 points. Each card is 85.6 x 54mm.
   // Front on left, back on right, repeated in 5 rows with cutting gaps.
