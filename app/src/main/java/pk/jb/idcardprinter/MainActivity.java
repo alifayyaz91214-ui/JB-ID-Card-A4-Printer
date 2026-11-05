@@ -37,7 +37,7 @@ public class MainActivity extends Activity {
         super.onDraw(c);c.drawColor(Color.rgb(230,235,244));
         float scale=Math.min((getWidth()-24f)/595f,(getHeight()-24f)/842f);
         c.save();c.translate((getWidth()-595f*scale)/2f,(getHeight()-842f*scale)/2f);c.scale(scale,scale);
-        c.drawColor(Color.WHITE);drawSheet(c);c.restore();
+        paper.setColor(Color.WHITE);c.drawRect(0,0,595,842,paper);drawSheet(c);c.restore();
       }
     };
     LinearLayout.LayoutParams sheetParams=new LinearLayout.LayoutParams(-1,460);sheetParams.bottomMargin=18;root.addView(sheetPreview,sheetParams);
