@@ -26,11 +26,26 @@ public class PassportActivity extends Activity {
   final float[] widths={35,51,35,40,30}, heights={45,51,45,50,40};
   ImageView preview;
   TextView status;
+  View sheetPreview;
+  Bitmap previewEdited;
   @Override public void onCreate(Bundle b){
     super.onCreate(b);
     LinearLayout root=new LinearLayout(this);root.setOrientation(1);root.setPadding(28,30,28,36);root.setBackgroundColor(Color.rgb(244,247,252));
     ScrollView scroll=new ScrollView(this);scroll.addView(root);setContentView(scroll);
     TextView title=new TextView(this);title.setText("JB Passport Photo Maker\n1, 2, 4 or 6 photos on 4R (102 x 152 mm)");title.setTextSize(25);title.setTextColor(Color.rgb(21,38,65));title.setTypeface(null,android.graphics.Typeface.BOLD);title.setGravity(Gravity.CENTER);root.addView(title);
+    TextView liveTitle=new TextView(this);liveTitle.setText("LIVE FINAL PRINT PREVIEW");liveTitle.setTextSize(17);liveTitle.setTextColor(Color.rgb(21,38,65));root.addView(liveTitle);
+    sheetPreview=new View(this){
+      @Override protected void onDraw(Canvas c){
+        super.onDraw(c);c.drawColor(Color.rgb(232,238,247));
+        int pw=a4?595:289,ph=a4?842:431;
+        float scale=Math.min((getWidth()-20f)/pw,(getHeight()-20f)/ph);
+        c.save();c.translate((getWidth()-pw*scale)/2f,(getHeight()-ph*scale)/2f);c.scale(scale,scale);
+        Paint paper=new Paint(3);paper.setColor(Color.WHITE);c.drawRect(0,0,pw,ph,paper);
+        if(previewEdited!=null)drawSheet(c,pw,ph,previewEdited);
+        c.restore();
+      }
+    };
+    LinearLayout.LayoutParams previewParams=new LinearLayout.LayoutParams(-1,430);previewParams.bottomMargin=14;root.addView(sheetPreview,previewParams);
     Button pick=new Button(this);pick.setText("Select portrait from gallery");root.addView(pick);
     pick.setOnClickListener(v->{Intent i=new Intent(Intent.ACTION_GET_CONTENT);i.setType("image/*");startActivityForResult(i,PICK);});
     preview=new ImageView(this);preview.setAdjustViewBounds(true);preview.setMinimumHeight(200);root.addView(preview);
@@ -38,19 +53,19 @@ public class PassportActivity extends Activity {
     TextView sizeLabel=new TextView(this);sizeLabel.setText("Photo size preset (confirm official application rules)");root.addView(sizeLabel);
     Spinner sizes=new Spinner(this);ArrayAdapter<String> sizeAdapter=new ArrayAdapter<>(this,android.R.layout.simple_spinner_dropdown_item,sizeNames);sizes.setAdapter(sizeAdapter);
     sizes.setOnItemSelectedListener(new android.widget.AdapterView.OnItemSelectedListener(){
-      public void onItemSelected(android.widget.AdapterView<?> parent,View view,int position,long id){sizeIndex=position;}
+      public void onItemSelected(android.widget.AdapterView<?> parent,View view,int position,long id){sizeIndex=position;updateSheet();}
       public void onNothingSelected(android.widget.AdapterView<?> parent){}
     });root.addView(sizes);
     TextView countLabel=new TextView(this);countLabel.setText("Photos per 4R sheet");countLabel.setTextSize(17);root.addView(countLabel);
     RadioGroup countGroup=new RadioGroup(this);countGroup.setOrientation(RadioGroup.HORIZONTAL);
     int[] counts={1,2,4,6};
     for(int count:counts){RadioButton rb=new RadioButton(this);rb.setText(""+count);rb.setId(500+count);countGroup.addView(rb);}
-    countGroup.check(506);countGroup.setOnCheckedChangeListener((g,id)->photoCount=id-500);root.addView(countGroup);
+    countGroup.check(506);countGroup.setOnCheckedChangeListener((g,id)->photoCount=id-500;updateSheet());root.addView(countGroup);
     TextView paperLabel=new TextView(this);paperLabel.setText("Paper size");paperLabel.setTextSize(17);root.addView(paperLabel);
     RadioGroup paper=new RadioGroup(this);paper.setOrientation(RadioGroup.HORIZONTAL);
     RadioButton fourR=new RadioButton(this);fourR.setId(710);fourR.setText("4R (4 x 6 inch)");paper.addView(fourR);
     RadioButton a4Option=new RadioButton(this);a4Option.setId(711);a4Option.setText("A4");paper.addView(a4Option);
-    paper.check(710);paper.setOnCheckedChangeListener((g,id)->a4=id==711);root.addView(paper);
+    paper.check(710);paper.setOnCheckedChangeListener((g,id)->a4=id==711;updateSheet());root.addView(paper);
     TextView enhanceLabel=new TextView(this);enhanceLabel.setText("Photo finishing - brightness");enhanceLabel.setTextSize(17);root.addView(enhanceLabel);
     SeekBar light=new SeekBar(this);light.setMax(100);light.setProgress(50);
     light.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener(){
@@ -167,13 +182,19 @@ public class PassportActivity extends Activity {
     Bitmap edited=editedPhoto(800);
     Bitmap output=Bitmap.createBitmap(edited.getWidth(),edited.getHeight(),Bitmap.Config.ARGB_8888);
     new Canvas(output).drawBitmap(edited,0,0,finishingPaint());
-    preview.setImageBitmap(output);
+    preview.setImageBitmap(output);previewEdited=edited;updateSheet();
   }
+  void updateSheet(){if(sheetPreview!=null)sheetPreview.invalidate();}
   // PDF points at 72 dpi: 4R portrait = 102 x 152 mm; photo = 35 x 45 mm.
   PdfDocument makePdf(){
     int pageW=a4?595:289,pageH=a4?842:431;
     PdfDocument doc=new PdfDocument();PdfDocument.Page page=doc.startPage(new PdfDocument.PageInfo.Builder(pageW,pageH,1).create());
     Canvas canvas=page.getCanvas();canvas.drawColor(Color.WHITE);
+    drawSheet(canvas,pageW,pageH,editedPhoto(2000));
+    doc.finishPage(page);return doc;
+  }
+  void drawSheet(Canvas canvas,int pageW,int pageH,Bitmap outputPhoto){
+    if(outputPhoto==null)return;
     float w=widths[sizeIndex]*72/25.4f,h=heights[sizeIndex]*72/25.4f;
     float gapX=14f,gapY=photoCount==6?9f:14f;
     int cols=Math.max(1,(int)Math.floor((pageW-24f+gapX)/(w+gapX)));
@@ -182,7 +203,6 @@ public class PassportActivity extends Activity {
     int visibleCount=Math.min(photoCount,cols*maxRows);
     rows=(visibleCount+cols-1)/cols;
     float left=(pageW-(cols*w+(cols-1)*gapX))/2f,top=(pageH-(rows*h+(rows-1)*gapY))/2f;
-    Bitmap outputPhoto=editedPhoto(2000);
     Paint imagePaint=finishingPaint();
     Paint border=new Paint(3);border.setColor(Color.BLACK);border.setStrokeWidth(.65f);border.setStyle(Paint.Style.STROKE);
     for(int row=0;row<rows;row++)for(int col=0;col<cols;col++){
@@ -196,7 +216,6 @@ public class PassportActivity extends Activity {
       else{int ch=Math.round(sw/desired);int y0=(sh-ch)/2;source=new Rect(0,y0,sw,y0+ch);}
       canvas.drawBitmap(outputPhoto,source,target,imagePaint);canvas.drawRect(target,border);
     }
-    doc.finishPage(page);return doc;
   }
   void printSheet(){
     PrintManager manager=(PrintManager)getSystemService(PRINT_SERVICE);
