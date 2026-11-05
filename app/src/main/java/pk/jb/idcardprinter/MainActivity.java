@@ -15,9 +15,10 @@ import java.io.*;
 
 public class MainActivity extends Activity {
   Bitmap front, back;
+  Uri frontUri, backUri;
   ImageView frontView, backView;
   TextView status;
-  static final int PICK_FRONT=101, PICK_BACK=102, SAVE=103;
+  static final int PICK_FRONT=101, PICK_BACK=102, SAVE=103, CROP_FRONT=104, CROP_BACK=105;
   @Override public void onCreate(Bundle b) {
     super.onCreate(b);
     LinearLayout root=new LinearLayout(this); root.setOrientation(1); root.setPadding(24,24,24,24);
@@ -28,16 +29,20 @@ public class MainActivity extends Activity {
     frontView.setMinimumHeight(130); backView.setMinimumHeight(130);
     addButton(root,"1. Select FRONT photo",()->pick(PICK_FRONT)); root.addView(frontView);
     addButton(root,"2. Select BACK photo",()->pick(PICK_BACK)); root.addView(backView);
+    addButton(root,"Manual crop FRONT (4 corners)",()->openCrop(frontUri,CROP_FRONT));
+    addButton(root,"Manual crop BACK (4 corners)",()->openCrop(backUri,CROP_BACK));
     addButton(root,"Auto crop both photos",()->{if(!ready())return;front=autoCrop(front);back=autoCrop(back);refresh();status.setText("Auto crop applied. Check edges before printing.");});
     addButton(root,"Print A4 directly",()->{if(!ready())return;printSheet();});
     addButton(root,"Save A4 as PDF",()->{if(!ready())return;Intent i=new Intent(Intent.ACTION_CREATE_DOCUMENT);i.setType("application/pdf");i.addCategory(Intent.CATEGORY_OPENABLE);i.putExtra(Intent.EXTRA_TITLE,"JB-ID-Cards-A4.pdf");startActivityForResult(i,SAVE);});
     status=new TextView(this);status.setText("Select both photos. Print at actual size (100%).");status.setTextSize(15);root.addView(status);
   }
   void addButton(LinearLayout root,String name,Runnable action){Button b=new Button(this);b.setText(name);root.addView(b);b.setOnClickListener(v->action.run());}
+  void openCrop(Uri uri,int code){if(uri==null){status.setText("Select the photo first.");return;}Intent i=new Intent(this,CropActivity.class);i.setData(uri);startActivityForResult(i,code);}
   void pick(int code){Intent i=new Intent(Intent.ACTION_GET_CONTENT);i.setType("image/*");startActivityForResult(i,code);}
   @Override protected void onActivityResult(int request,int result,Intent data){
     super.onActivityResult(request,result,data);
     if(result!=RESULT_OK||data==null||data.getData()==null)return;
+    if(request==CROP_FRONT||request==CROP_BACK){try{String path=data.getStringExtra("cropPath");Bitmap bmp=BitmapFactory.decodeFile(path);if(bmp==null)throw new IOException("Cropped image unavailable");if(request==CROP_FRONT)front=bmp;else back=bmp;refresh();status.setText("Manual crop saved.");}catch(Exception e){status.setText("Crop error: "+e.getMessage());}return;}
     if(request==SAVE){try(OutputStream out=getContentResolver().openOutputStream(data.getData())){PdfDocument pdf=makePdf();pdf.writeTo(out);pdf.close();status.setText("PDF saved successfully.");}catch(Exception e){status.setText("PDF error: "+e.getMessage());}return;}
     try{
       BitmapFactory.Options opts=new BitmapFactory.Options();opts.inJustDecodeBounds=true;
@@ -47,6 +52,7 @@ public class MainActivity extends Activity {
       Bitmap bmp;
       try(InputStream in=getContentResolver().openInputStream(data.getData())){bmp=BitmapFactory.decodeStream(in,null,opts);}
       if(bmp==null)throw new IOException("Image could not be decoded");
+      if(request==PICK_FRONT)frontUri=data.getData();else if(request==PICK_BACK)backUri=data.getData();
       Bitmap cropped=autoCrop(bmp);
       if(request==PICK_FRONT)front=cropped;else if(request==PICK_BACK)back=cropped;
       status.setText(cropped==bmp ? "Card edges uncertain. Original kept; try a plain contrasting background." : "Automatic crop applied. Check preview before printing.");
