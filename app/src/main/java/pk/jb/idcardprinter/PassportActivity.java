@@ -20,6 +20,8 @@ public class PassportActivity extends Activity {
   boolean a4=false;
   int brightness=0;
   int contrast=100;
+  int smoothing=0;
+  int backgroundChoice=0; // 0 original, 1 white, 2 blue, 3 gray
   final String[] sizeNames={"Pakistan commonly used / UK - 35 x 45 mm","USA / India - 51 x 51 mm","EU common - 35 x 45 mm","Custom - 40 x 50 mm","Custom - 30 x 40 mm"};
   final float[] widths={35,51,35,40,30}, heights={45,51,45,50,40};
   ImageView preview;
@@ -63,6 +65,22 @@ public class PassportActivity extends Activity {
       public void onStartTrackingTouch(SeekBar bar){}
       public void onStopTrackingTouch(SeekBar bar){}
     });root.addView(contrastBar);
+    TextView editTitle=new TextView(this);editTitle.setText("PHOTO EDITING  •  OFFLINE");editTitle.setTextSize(18);editTitle.setTextColor(Color.rgb(21,38,65));root.addView(editTitle);
+    TextView smoothTitle=new TextView(this);smoothTitle.setText("Skin / photo smoothing (0-5)");root.addView(smoothTitle);
+    SeekBar smoothBar=new SeekBar(this);smoothBar.setMax(5);smoothBar.setProgress(0);
+    smoothBar.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener(){
+      public void onProgressChanged(SeekBar b,int v,boolean user){smoothing=v;if(user)refreshPreview();}
+      public void onStartTrackingTouch(SeekBar b){}
+      public void onStopTrackingTouch(SeekBar b){}
+    });root.addView(smoothBar);
+    TextView bgTitle=new TextView(this);bgTitle.setText("Plain background replacement (best on solid backgrounds)");root.addView(bgTitle);
+    Spinner bg=new Spinner(this);
+    bg.setAdapter(new ArrayAdapter<String>(this,android.R.layout.simple_spinner_dropdown_item,new String[]{"Keep original","White background","Light blue background","Light gray background"}));
+    bg.setOnItemSelectedListener(new android.widget.AdapterView.OnItemSelectedListener(){
+      public void onItemSelected(android.widget.AdapterView<?> parent,View v,int pos,long id){backgroundChoice=pos;refreshPreview();}
+      public void onNothingSelected(android.widget.AdapterView<?> parent){}
+    });root.addView(bg);
+    TextView editNote=new TextView(this);editNote.setText("Background replacement uses corner-color matching, not AI person segmentation. Review hair edges and official photo rules. Clothes change requires a separate AI model and is not available yet.");root.addView(editNote);
     TextView fitting=new TextView(this);fitting.setText("Larger sizes may fit fewer photos on 4R. The PDF will never shrink the selected physical photo size.");root.addView(fitting);
     Button pdf=new Button(this);pdf.setText("Save 4R PDF");root.addView(pdf);
     pdf.setOnClickListener(v->{if(!ready())return;Intent i=new Intent(Intent.ACTION_CREATE_DOCUMENT);i.setType("application/pdf");i.addCategory(Intent.CATEGORY_OPENABLE);i.putExtra(Intent.EXTRA_TITLE,a4?"JB-Passport-Photos-A4.pdf":"JB-Passport-Photos-4R.pdf");startActivityForResult(i,SAVE);});
@@ -104,12 +122,49 @@ public class PassportActivity extends Activity {
     ColorMatrix matrix=new ColorMatrix(new float[]{c,0,0,0,offset,0,c,0,0,offset,0,0,c,0,offset,0,0,0,1,0});
     p.setColorFilter(new ColorMatrixColorFilter(matrix));return p;
   }
+  Bitmap editedPhoto(int maxEdge){
+    if(photo==null)return null;
+    float scale=Math.min(1f,(float)maxEdge/Math.max(photo.getWidth(),photo.getHeight()));
+    int w=Math.max(1,Math.round(photo.getWidth()*scale)),h=Math.max(1,Math.round(photo.getHeight()*scale));
+    Bitmap result=Bitmap.createScaledBitmap(photo,w,h,true).copy(Bitmap.Config.ARGB_8888,true);
+    if(smoothing>0){
+      try{
+        org.opencv.core.Mat src=new org.opencv.core.Mat(),dst=new org.opencv.core.Mat();
+        org.opencv.android.Utils.bitmapToMat(result,src);
+        org.opencv.imgproc.Imgproc.bilateralFilter(src,dst,5+smoothing*2,15+smoothing*10,10+smoothing*8);
+        org.opencv.android.Utils.matToBitmap(dst,result);src.release();dst.release();
+      }catch(Exception ignored){}
+    }
+    if(backgroundChoice>0){
+      int[] pixels=new int[w*h];result.getPixels(pixels,0,w,0,0,w,h);
+      int corner=pixels[0],corner2=pixels[w-1],corner3=pixels[(h-1)*w],corner4=pixels[w*h-1];
+      int r=(Color.red(corner)+Color.red(corner2)+Color.red(corner3)+Color.red(corner4))/4;
+      int g=(Color.green(corner)+Color.green(corner2)+Color.green(corner3)+Color.green(corner4))/4;
+      int b=(Color.blue(corner)+Color.blue(corner2)+Color.blue(corner3)+Color.blue(corner4))/4;
+      int replacement=backgroundChoice==1?Color.WHITE:(backgroundChoice==2?Color.rgb(204,228,248):Color.rgb(225,225,225));
+      // Only replace corner-connected pixels; avoids recoloring isolated foreground areas.
+      boolean[] seen=new boolean[pixels.length];int[] queue=new int[pixels.length];int head=0,tail=0;
+      for(int idx:new int[]{0,w-1,(h-1)*w,w*h-1}){if(!seen[idx]){seen[idx]=true;queue[tail++]=idx;}}
+      while(head<tail){
+        int idx=queue[head++],color=pixels[idx];
+        int dr=Color.red(color)-r,dg=Color.green(color)-g,db=Color.blue(color)-b;
+        if(dr*dr+dg*dg+db*db>2700)continue;
+        pixels[idx]=replacement;int x=idx%w,y=idx/w;
+        if(x>0&&!seen[idx-1]){seen[idx-1]=true;queue[tail++]=idx-1;}
+        if(x+1<w&&!seen[idx+1]){seen[idx+1]=true;queue[tail++]=idx+1;}
+        if(y>0&&!seen[idx-w]){seen[idx-w]=true;queue[tail++]=idx-w;}
+        if(y+1<h&&!seen[idx+w]){seen[idx+w]=true;queue[tail++]=idx+w;}
+      }
+      result.setPixels(pixels,0,w,0,0,w,h);
+    }
+    return result;
+  }
   void refreshPreview(){
     if(photo==null)return;
-    float factor=Math.min(1f,800f/Math.max(photo.getWidth(),photo.getHeight()));
-    int w=Math.max(1,Math.round(photo.getWidth()*factor)),h=Math.max(1,Math.round(photo.getHeight()*factor));
-    Bitmap output=Bitmap.createBitmap(w,h,Bitmap.Config.ARGB_8888);
-    Canvas c=new Canvas(output);c.drawBitmap(photo,null,new Rect(0,0,w,h),finishingPaint());preview.setImageBitmap(output);
+    Bitmap edited=editedPhoto(800);
+    Bitmap output=Bitmap.createBitmap(edited.getWidth(),edited.getHeight(),Bitmap.Config.ARGB_8888);
+    new Canvas(output).drawBitmap(edited,0,0,finishingPaint());
+    preview.setImageBitmap(output);
   }
   // PDF points at 72 dpi: 4R portrait = 102 x 152 mm; photo = 35 x 45 mm.
   PdfDocument makePdf(){
@@ -124,18 +179,19 @@ public class PassportActivity extends Activity {
     int visibleCount=Math.min(photoCount,cols*maxRows);
     rows=(visibleCount+cols-1)/cols;
     float left=(pageW-(cols*w+(cols-1)*gapX))/2f,top=(pageH-(rows*h+(rows-1)*gapY))/2f;
+    Bitmap outputPhoto=editedPhoto(2000);
     Paint imagePaint=finishingPaint();
     Paint border=new Paint(3);border.setColor(Color.BLACK);border.setStrokeWidth(.65f);border.setStyle(Paint.Style.STROKE);
     for(int row=0;row<rows;row++)for(int col=0;col<cols;col++){
       if(row*cols+col>=visibleCount)continue;
       float x=left+col*(w+gapX),y=top+row*(h+gapY);
       RectF target=new RectF(x,y,x+w,y+h);
-      float desired=w/h,ratio=(float)photo.getWidth()/photo.getHeight();
-      int sw=photo.getWidth(),sh=photo.getHeight();
+      float desired=w/h,ratio=(float)outputPhoto.getWidth()/outputPhoto.getHeight();
+      int sw=outputPhoto.getWidth(),sh=outputPhoto.getHeight();
       Rect source;
       if(ratio>desired){int cw=Math.round(sh*desired);int x0=(sw-cw)/2;source=new Rect(x0,0,x0+cw,sh);}
       else{int ch=Math.round(sw/desired);int y0=(sh-ch)/2;source=new Rect(0,y0,sw,y0+ch);}
-      canvas.drawBitmap(photo,source,target,imagePaint);canvas.drawRect(target,border);
+      canvas.drawBitmap(outputPhoto,source,target,imagePaint);canvas.drawRect(target,border);
     }
     doc.finishPage(page);return doc;
   }
