@@ -26,7 +26,7 @@ public class MainActivity extends Activity {
   @Override public void onCreate(Bundle b) {
     super.onCreate(b);
     try{cvReady=org.opencv.android.OpenCVLoader.initLocal();}catch(Throwable e){cvReady=false;}
-    LinearLayout root=new LinearLayout(this); root.setOrientation(1); root.setPadding(24,24,24,24);
+    LinearLayout root=new LinearLayout(this); root.setOrientation(1); root.setPadding(28,30,28,36);root.setBackgroundColor(Color.rgb(244,247,252));
     ScrollView scroll=new ScrollView(this); scroll.addView(root); setContentView(scroll);
     TextView title=new TextView(this); title.setText("JB Mobile & PhotoState\nID Card A4 Printer"); title.setTextSize(24); title.setGravity(17); root.addView(title);
     frontView=new ImageView(this); backView=new ImageView(this);
