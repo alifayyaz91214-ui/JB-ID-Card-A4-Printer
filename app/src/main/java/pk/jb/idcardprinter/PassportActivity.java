@@ -26,9 +26,9 @@ public class PassportActivity extends Activity {
   TextView status;
   @Override public void onCreate(Bundle b){
     super.onCreate(b);
-    LinearLayout root=new LinearLayout(this);root.setOrientation(1);root.setPadding(24,24,24,24);
+    LinearLayout root=new LinearLayout(this);root.setOrientation(1);root.setPadding(28,30,28,36);root.setBackgroundColor(Color.rgb(244,247,252));
     ScrollView scroll=new ScrollView(this);scroll.addView(root);setContentView(scroll);
-    TextView title=new TextView(this);title.setText("JB Passport Photo Maker\n1, 2, 4 or 6 photos on 4R (102 x 152 mm)");title.setTextSize(22);title.setGravity(Gravity.CENTER);root.addView(title);
+    TextView title=new TextView(this);title.setText("JB Passport Photo Maker\n1, 2, 4 or 6 photos on 4R (102 x 152 mm)");title.setTextSize(25);title.setTextColor(Color.rgb(21,38,65));title.setTypeface(null,android.graphics.Typeface.BOLD);title.setGravity(Gravity.CENTER);root.addView(title);
     Button pick=new Button(this);pick.setText("Select portrait from gallery");root.addView(pick);
     pick.setOnClickListener(v->{Intent i=new Intent(Intent.ACTION_GET_CONTENT);i.setType("image/*");startActivityForResult(i,PICK);});
     preview=new ImageView(this);preview.setAdjustViewBounds(true);preview.setMinimumHeight(200);root.addView(preview);
