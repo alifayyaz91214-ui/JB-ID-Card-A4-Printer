@@ -23,7 +23,9 @@ public final class CardDetector {
       int shortSide=(int)Math.round(longSide*54.0/85.6);
       int outW=portrait?shortSide:longSide,outH=portrait?longSide:shortSide;
       MatOfPoint2f srcPts=new MatOfPoint2f(),dstPts=new MatOfPoint2f();
-      // Add a very small 0.5% edge safety margin (avoid surrounding fabric) about its centre.
+      // Perspective correction maps all four independently detected corners to a true rectangle.
+      // No perspective skew remains in the output when corner detection is accurate.
+      // Add a very small 0.5% edge safety margin about its centre.
       // Clamp to source bounds to avoid sampling outside the photo.
       double cx=0,cy=0;
       for(Point point:original){cx+=point.x;cy+=point.y;}
@@ -35,7 +37,7 @@ public final class CardDetector {
       srcPts.fromArray(original);
       dstPts.fromArray(new Point(0,0),new Point(outW-1,0),new Point(outW-1,outH-1),new Point(0,outH-1));
       Mat transform=Imgproc.getPerspectiveTransform(srcPts,dstPts),output=new Mat();
-      Imgproc.warpPerspective(rgba,output,transform,new Size(outW,outH));
+      Imgproc.warpPerspective(rgba,output,transform,new Size(outW,outH),Imgproc.INTER_CUBIC,Core.BORDER_REPLICATE);
       if(portrait){
         Mat rotated=new Mat();
         Core.rotate(output,rotated,Core.ROTATE_90_CLOCKWISE);
@@ -55,7 +57,7 @@ public final class CardDetector {
       double factor=Math.min(1.0,1000.0/Math.max(source.getWidth(),source.getHeight()));
       Imgproc.resize(rgba,small,new Size(),factor,factor,Imgproc.INTER_AREA);
       Imgproc.cvtColor(small,gray,Imgproc.COLOR_RGBA2GRAY);
-      Imgproc.GaussianBlur(gray,gray,new Size(5,5),0);
+      Imgproc.GaussianBlur(gray,gray,new Size(3,3),0);
       Point[] best=null;
       double bestScore=-Double.MAX_VALUE;
       double frame=small.width()*small.height();
@@ -73,7 +75,7 @@ public final class CardDetector {
           if(area<frame*.008||area>frame*.85)continue;
           MatOfPoint2f curve=new MatOfPoint2f(contour.toArray()),approx=new MatOfPoint2f();
           double perimeter=Imgproc.arcLength(curve,true);
-          Imgproc.approxPolyDP(curve,approx,.022*perimeter,true);
+          Imgproc.approxPolyDP(curve,approx,.018*perimeter,true);
           Point[] p=approx.toArray();
           if(p.length==4){
             MatOfPoint polygon=new MatOfPoint(p);
@@ -86,9 +88,9 @@ public final class CardDetector {
               double ratio=width/Math.max(1,height);
               double cx=(ordered[0].x+ordered[1].x+ordered[2].x+ordered[3].x)/4;
               double cy=(ordered[0].y+ordered[1].y+ordered[2].y+ordered[3].y)/4;
-              if(((ratio>=1.35&&ratio<=1.88)||(ratio>=.53&&ratio<=.74)) && cx>small.width()*.08&&cx<small.width()*.92 && cy>small.height()*.08&&cy<small.height()*.92){
+              if(((ratio>=1.20&&ratio<=2.05)||(ratio>=.48&&ratio<=.84)) && cx>small.width()*.08&&cx<small.width()*.92 && cy>small.height()*.08&&cy<small.height()*.92){
                 double normalizedRatio=ratio>=1?ratio:1.0/ratio;
-                double score=Math.sqrt(area/frame)-.45*Math.abs(normalizedRatio-85.6/54.0);
+                double score=Math.sqrt(area/frame)-.70*Math.abs(normalizedRatio-85.6/54.0);
                 if(score>bestScore){bestScore=score;best=ordered;}
               }
             }
