@@ -64,7 +64,7 @@ public class PhotoCopyActivity extends Activity {
     CheckBox scan=new CheckBox(this);scan.setText("Document scan mode: crisp black text and clean white paper");scan.setChecked(true);root.addView(scan);
     scan.setOnCheckedChangeListener((button,checked)->{scanMode=checked;refresh();});
     CheckBox shadows=new CheckBox(this);shadows.setText("Remove Shadows / Uneven Lighting (preserve text and stamps)");root.addView(shadows);
-    shadows.setOnCheckedChangeListener((b,checked)->{removeShadows=checked;rebuildCleaned();});
+    shadows.setOnCheckedChangeListener((buttonView,checked)->{removeShadows=checked;rebuildCleaned();});
     TextView strengthLabel=new TextView(this);strengthLabel.setText("Shadow removal strength: 55");root.addView(strengthLabel);
     SeekBar shadowBar=new SeekBar(this);shadowBar.setMax(100);shadowBar.setProgress(55);root.addView(shadowBar);
     shadowBar.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener(){public void onProgressChanged(SeekBar b,int v,boolean user){shadowStrength=v;strengthLabel.setText("Shadow removal strength: "+v);}public void onStartTrackingTouch(SeekBar b){}public void onStopTrackingTouch(SeekBar b){rebuildCleaned();}});
