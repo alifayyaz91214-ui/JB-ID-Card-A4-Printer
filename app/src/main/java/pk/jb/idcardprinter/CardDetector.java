@@ -12,6 +12,11 @@ public final class CardDetector {
     if(source==null)return null;
     Point[] original=findCorners(source);
     if(original==null)return null;
+    return warp(source,original);
+  }
+  public static Bitmap warp(Bitmap source,Point[] original){
+    if(source==null||original==null||original.length!=4)return null;
+    original=original.clone();
     Mat rgba=new Mat();
     Utils.bitmapToMat(source,rgba);
     try{
@@ -62,7 +67,7 @@ public final class CardDetector {
       double bestScore=-Double.MAX_VALUE;
       double frame=small.width()*small.height();
       // Multi-pass thresholding and rectangular hull fallback help pale cards on hands.
-      int[][] thresholds={{12,40},{20,65},{35,105},{55,150},{85,200}};
+      int[][] thresholds={{8,25},{12,40},{20,65},{35,105},{55,150},{85,200}};
       for(int[] threshold:thresholds){
         Imgproc.Canny(gray,edges,threshold[0],threshold[1]);
         Mat kernel=Imgproc.getStructuringElement(Imgproc.MORPH_RECT,new Size(5,5));
@@ -105,6 +110,18 @@ public final class CardDetector {
           }
           curve.release();approx.release();contour.release();
         }
+      }
+      if(best==null){
+        // Contrast-limited histogram equalization can reveal faint black-and-white card borders.
+        Mat enhanced=new Mat();org.opencv.imgproc.CLAHE clahe=Imgproc.createCLAHE(3.0,new Size(8,8));clahe.apply(gray,enhanced);
+        Imgproc.adaptiveThreshold(enhanced,edges,255,Imgproc.ADAPTIVE_THRESH_GAUSSIAN_C,Imgproc.THRESH_BINARY,31,8);
+        Mat kernel=Imgproc.getStructuringElement(Imgproc.MORPH_RECT,new Size(3,3));Imgproc.morphologyEx(edges,edges,Imgproc.MORPH_CLOSE,kernel);kernel.release();
+        List<MatOfPoint> extra=new ArrayList<>();Imgproc.findContours(edges,extra,hierarchy,Imgproc.RETR_LIST,Imgproc.CHAIN_APPROX_SIMPLE);
+        for(MatOfPoint contour:extra){double area=Math.abs(Imgproc.contourArea(contour));if(area<frame*.018||area>frame*.75){contour.release();continue;}
+          MatOfPoint2f curve=new MatOfPoint2f(contour.toArray()),approx=new MatOfPoint2f();Imgproc.approxPolyDP(curve,approx,.025*Imgproc.arcLength(curve,true),true);
+          Point[] pts=approx.toArray();if(pts.length==4){MatOfPoint poly=new MatOfPoint(pts);boolean convex=Imgproc.isContourConvex(poly);poly.release();if(convex){Point[] q=order(pts);double w=(dist(q[0],q[1])+dist(q[2],q[3]))/2,h=(dist(q[0],q[3])+dist(q[1],q[2]))/2;double ratio=Math.max(w,h)/Math.max(1,Math.min(w,h));double cx=0,cy=0;for(Point p:q){cx+=p.x;cy+=p.y;}cx/=4;cy/=4;if(ratio>=1.3&&ratio<=1.9&&cx>small.width()*.08&&cx<small.width()*.92&&cy>small.height()*.08&&cy<small.height()*.92){best=q;curve.release();approx.release();contour.release();break;}}}
+          curve.release();approx.release();contour.release();
+        }for(MatOfPoint c:extra)c.release();enhanced.release();
       }
       if(best==null)return null;
       Point[] original=new Point[4];
