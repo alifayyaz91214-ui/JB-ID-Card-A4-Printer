@@ -183,6 +183,8 @@ public class MainActivity extends Activity {
       addButton(panel,"✂  Front: "+(f==null?"select and crop":"edit crop"),()->cropSlot(index,true));
       if(b!=null){ImageView image=new ImageView(this);image.setImageBitmap(previewBitmap(b));image.setAdjustViewBounds(true);image.setMaxHeight(125);panel.addView(image);}
       addButton(panel,"✂  Back: "+(b==null?"select and crop":"edit crop"),()->cropSlot(index,false));
+      if(f!=null&&b==null)addButton(panel,"This is BACK (not Front)",()->{if(index==0){back=front;front=null;}else{extraBack[index]=extraFront[index];extraFront[index]=null;}cardBackSources[index]=cardFrontSources[index];cardFrontSources[index]=null;refresh();});
+      if(b!=null&&f==null)addButton(panel,"This is FRONT (not Back)",()->{if(index==0){front=back;back=null;}else{extraFront[index]=extraBack[index];extraBack[index]=null;}cardFrontSources[index]=cardBackSources[index];cardBackSources[index]=null;refresh();});
       if(f!=null||b!=null){
         addButton(panel,"Remove this card",()->{if(index==0){front=null;back=null;}else{extraFront[index]=null;extraBack[index]=null;}cardFrontSources[index]=null;cardBackSources[index]=null;refresh();});
         TextView count=section("Copies: "+cardCopies[id]);panel.addView(count);
