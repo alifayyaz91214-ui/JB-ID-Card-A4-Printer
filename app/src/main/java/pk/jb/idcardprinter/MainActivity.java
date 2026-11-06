@@ -24,6 +24,7 @@ public class MainActivity extends Activity {
   int darkness=12;
   int brightness=10;
   int copyCount=5;
+  int verticalPosition=1; // 0 top, 1 center, 2 bottom
   static final int PICK_FRONT=101, PICK_BACK=102, SAVE=103, CROP_FRONT=104, CROP_BACK=105;
   @Override public void onCreate(Bundle b) {
     super.onCreate(b);
@@ -78,6 +79,11 @@ public class MainActivity extends Activity {
     int[] copyOptions={1,2,4,5};
     for(int count:copyOptions){RadioButton rb=new RadioButton(this);rb.setId(600+count);rb.setText(""+count);copies.addView(rb);}
     copies.check(605);copies.setOnCheckedChangeListener((g,id)->{copyCount=id-600;updateSheet();});root.addView(copies);
+    TextView positionLabel=new TextView(this);positionLabel.setText("A4 card placement");positionLabel.setTextSize(17);root.addView(positionLabel);
+    RadioGroup positions=new RadioGroup(this);positions.setOrientation(RadioGroup.HORIZONTAL);
+    String[] positionNames={"Top","Center","Bottom"};
+    for(int i=0;i<3;i++){RadioButton rb=new RadioButton(this);rb.setId(720+i);rb.setText(positionNames[i]);positions.addView(rb);}
+    positions.check(721);positions.setOnCheckedChangeListener((g,id)->{verticalPosition=id-720;updateSheet();});root.addView(positions);
     addButton(root,"Print A4 directly",()->{if(!ready())return;printSheet();});
     addButton(root,"Save A4 as PDF",()->{if(!ready())return;Intent i=new Intent(Intent.ACTION_CREATE_DOCUMENT);i.setType("application/pdf");i.addCategory(Intent.CATEGORY_OPENABLE);i.putExtra(Intent.EXTRA_TITLE,"JB-ID-Cards-A4.pdf");startActivityForResult(i,SAVE);});
     status=new TextView(this);status.setText("Select both photos. Print at actual size (100%).");status.setTextSize(15);root.addView(status);
@@ -164,7 +170,8 @@ public class MainActivity extends Activity {
     final float totalW=2f*cardW+middleGap;
     final float totalH=copyCount*cardH+Math.max(0,copyCount-1)*rowGap;
     final float x1=(pageW-totalW)/2f,x2=x1+cardW+middleGap;
-    final float top=(pageH-totalH)/2f;
+    final float freeSpace=Math.max(0,pageH-totalH);
+    final float top=verticalPosition==0?Math.min(18f,freeSpace):(verticalPosition==2?Math.max(0,freeSpace-18f):freeSpace/2f);
     for(int row=0;row<copyCount;row++){
       float y=top+row*(cardH+rowGap);
       if(front!=null)drawCard(c,front,x1,y,cardW,cardH);
