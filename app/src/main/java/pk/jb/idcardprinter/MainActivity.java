@@ -109,7 +109,7 @@ public class MainActivity extends Activity {
     addButton(root,"Clear second ID card",()->{secondFront=null;secondBack=null;refresh();status.setText("Second ID card removed.");});
     root.addView(section("3  Print or save"));
     addButton(root,"🖨  Print A4",()->{if(!ready())return;printSheet();});
-    addButton(root,"Save as JPG",()->{if(ready())JpgExport.choose(this,SAVE_JPG,"JB-ID-Cards-A4.jpg");});
+    addButton(root,"Save as JPG",()->{if(ready()){if(hasSecondCard())status.setText("JPG saves page 1 only. Save PDF for both ID cards.");JpgExport.choose(this,SAVE_JPG,"JB-ID-Cards-A4.jpg");}});
     addButton(root,"Save PDF",()->{if(!ready())return;Intent i=new Intent(Intent.ACTION_CREATE_DOCUMENT);i.setType("application/pdf");i.addCategory(Intent.CATEGORY_OPENABLE);i.putExtra(Intent.EXTRA_TITLE,"JB-ID-Cards-A4.pdf");startActivityForResult(i,SAVE);});
     status=new TextView(this);status.setText("Capture both sides, then print or save.");status.setTextSize(14);status.setTextColor(Color.rgb(85,103,125));status.setPadding(6,12,6,12);root.addView(status);
   }
@@ -195,28 +195,34 @@ public class MainActivity extends Activity {
   }
   // A4 at 72dpi: 595 x 842 points. Each card is 85.6 x 54mm.
   // Front on left, back on right, repeated in 5 rows with cutting gaps.
+  boolean hasSecondCard(){return secondFront!=null&&secondBack!=null;}
   PdfDocument makePdf(){
-    PdfDocument pdf=new PdfDocument();PdfDocument.PageInfo info=new PdfDocument.PageInfo.Builder(595,842,1).create();
-    PdfDocument.Page page=pdf.startPage(info);Canvas c=page.getCanvas();c.drawColor(Color.WHITE);drawSheet(c);
-    pdf.finishPage(page);return pdf;
+    PdfDocument pdf=new PdfDocument();
+    int pages=hasSecondCard()?2:1;
+    for(int n=0;n<pages;n++){
+      PdfDocument.Page page=pdf.startPage(new PdfDocument.PageInfo.Builder(595,842,n+1).create());
+      Canvas canvas=page.getCanvas();canvas.drawColor(Color.WHITE);drawSheetPage(canvas,n);
+      pdf.finishPage(page);
+    }
+    return pdf;
   }
-  void drawSheet(Canvas c){
+  void drawSheet(Canvas c){drawSheetPage(c,0);}
+  void drawSheetPage(Canvas c,int pageIndex){
     final float pageW=595f,pageH=842f;
     final float cardW=85.6f*72f/25.4f,cardH=54f*72f/25.4f;
-    // Keep actual card dimensions. Center the entire group on the page.
-    // Fewer selected rows leave room for larger, easier-to-cut vertical gaps.
-    final float middleGap=32f; // 11.3 mm between front and back
-    final float rowGap=copyCount==5?14f:(copyCount==4?48f:(copyCount==2?65f:0f));
+    final float middleGap=32f;
+    // Two cards: four copies of each on separate A4 pages; never squeeze eight rows.
+    final int rows=hasSecondCard()?4:copyCount;
+    final float rowGap=rows==5?14f:(rows==4?48f:(rows==2?65f:0f));
     final float totalW=2f*cardW+middleGap;
-    final float totalH=copyCount*cardH+Math.max(0,copyCount-1)*rowGap;
+    final float totalH=rows*cardH+Math.max(0,rows-1)*rowGap;
     final float x1=(pageW-totalW)/2f,x2=x1+cardW+middleGap;
     final float freeSpace=Math.max(0,pageH-totalH);
     final float top=verticalPosition==0?Math.min(18f,freeSpace):(verticalPosition==2?Math.max(0,freeSpace-18f):freeSpace/2f);
-    for(int row=0;row<copyCount;row++){
+    boolean useSecond=hasSecondCard()&&(secondFirst?pageIndex==0:pageIndex==1);
+    Bitmap f=useSecond?secondFront:front,b=useSecond?secondBack:back;
+    for(int row=0;row<rows;row++){
       float y=top+row*(cardH+rowGap);
-      boolean hasSecond=secondFront!=null&&secondBack!=null;
-      boolean useSecond=hasSecond&&(secondFirst?row<copyCount/2:row>=copyCount/2);
-      Bitmap f=useSecond?secondFront:front,b=useSecond?secondBack:back;
       if(f!=null)drawCard(c,f,x1,y,cardW,cardH);
       if(b!=null)drawCard(c,b,x2,y,cardW,cardH);
     }
@@ -236,7 +242,7 @@ public class MainActivity extends Activity {
     PrintManager manager=(PrintManager)getSystemService(PRINT_SERVICE);
     manager.print("JB ID Card A4",new PrintDocumentAdapter(){
       @Override public void onLayout(PrintAttributes oldA,PrintAttributes newA,android.os.CancellationSignal signal,LayoutResultCallback callback,Bundle extras){
-        PrintDocumentInfo info=new PrintDocumentInfo.Builder("JB-ID-Cards-A4.pdf").setContentType(PrintDocumentInfo.CONTENT_TYPE_DOCUMENT).setPageCount(1).build();
+        PrintDocumentInfo info=new PrintDocumentInfo.Builder("JB-ID-Cards-A4.pdf").setContentType(PrintDocumentInfo.CONTENT_TYPE_DOCUMENT).setPageCount(hasSecondCard()?2:1).build();
         callback.onLayoutFinished(info,true);
       }
       @Override public void onWrite(PageRange[] pages,ParcelFileDescriptor destination,android.os.CancellationSignal signal,WriteResultCallback callback){
