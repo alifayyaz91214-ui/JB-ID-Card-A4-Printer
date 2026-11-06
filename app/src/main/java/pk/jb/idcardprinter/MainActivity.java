@@ -26,7 +26,7 @@ public class MainActivity extends Activity {
   int brightness=10;
   int copyCount=5;
   int verticalPosition=1; // 0 top, 1 center, 2 bottom
-  static final int PICK_FRONT=101, PICK_BACK=102, SAVE=103, CROP_FRONT=104, CROP_BACK=105, CAMERA_FRONT=106, CAMERA_BACK=107;
+  static final int PICK_FRONT=101, PICK_BACK=102, SAVE=103, CROP_FRONT=104, CROP_BACK=105, CAMERA_FRONT=106, CAMERA_BACK=107, SAVE_JPG=108;
   int navy=Color.rgb(23,43,72),accent=Color.rgb(25,105,205);
   GradientDrawable rounded(int color,int radius){GradientDrawable d=new GradientDrawable();d.setColor(color);d.setCornerRadius(radius);return d;}
   TextView section(String title){TextView t=new TextView(this);t.setText(title);t.setTextColor(navy);t.setTextSize(18);t.setTypeface(null,Typeface.BOLD);t.setPadding(4,18,4,8);return t;}
@@ -98,6 +98,7 @@ public class MainActivity extends Activity {
     positions.check(721);positions.setOnCheckedChangeListener((g,id)->{verticalPosition=id-720;updateSheet();});advanced.addView(positions);
     root.addView(section("3  Print or save"));
     addButton(root,"🖨  Print A4",()->{if(!ready())return;printSheet();});
+    addButton(root,"Save as JPG",()->{if(ready())JpgExport.choose(this,SAVE_JPG,"JB-ID-Cards-A4.jpg");});
     addButton(root,"Save PDF",()->{if(!ready())return;Intent i=new Intent(Intent.ACTION_CREATE_DOCUMENT);i.setType("application/pdf");i.addCategory(Intent.CATEGORY_OPENABLE);i.putExtra(Intent.EXTRA_TITLE,"JB-ID-Cards-A4.pdf");startActivityForResult(i,SAVE);});
     status=new TextView(this);status.setText("Capture both sides, then print or save.");status.setTextSize(14);status.setTextColor(Color.rgb(85,103,125));status.setPadding(6,12,6,12);root.addView(status);
   }
@@ -122,6 +123,7 @@ public class MainActivity extends Activity {
       }).start();return;
     }
     if(request==CROP_FRONT||request==CROP_BACK){try{String path=data.getStringExtra("cropPath");Bitmap bmp=BitmapFactory.decodeFile(path);if(bmp==null)throw new IOException("Cropped image unavailable");if(request==CROP_FRONT)front=bmp;else back=bmp;refresh();status.setText("Manual crop saved.");}catch(Exception e){status.setText("Crop error: "+e.getMessage());}return;}
+    if(request==SAVE_JPG){try{JpgExport.save(this,data.getData(),2480,3508,c->{c.scale(2480f/595f,3508f/842f);drawSheet(c);});status.setText("A4 JPG saved at 300 DPI.");}catch(Exception e){status.setText("JPG save failed: "+e.getMessage());}return;}
     if(request==SAVE){try(OutputStream out=getContentResolver().openOutputStream(data.getData())){PdfDocument pdf=makePdf();pdf.writeTo(out);pdf.close();status.setText("PDF saved successfully.");}catch(Exception e){status.setText("PDF error: "+e.getMessage());}return;}
     try{
       BitmapFactory.Options opts=new BitmapFactory.Options();opts.inJustDecodeBounds=true;
