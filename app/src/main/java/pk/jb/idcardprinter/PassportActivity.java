@@ -15,6 +15,8 @@ import java.io.*;
 public class PassportActivity extends Activity {
   static final int PICK=201,SAVE=202,CAMERA=203;
   Bitmap photo;
+  RectF cropArea=null; // normalized crop coordinates, shared by preview and PDF
+  Button cropButton;
   int photoCount=6;
   int sizeIndex=0;
   boolean a4=false;
@@ -51,11 +53,13 @@ public class PassportActivity extends Activity {
     Button camera=new Button(this);camera.setText("Scan / take photo with camera");root.addView(camera);
     camera.setOnClickListener(v->{Intent i=new Intent(android.provider.MediaStore.ACTION_IMAGE_CAPTURE);try{startActivityForResult(i,CAMERA);}catch(Exception e){status.setText("Camera app unavailable.");}});
     preview=new ImageView(this);preview.setAdjustViewBounds(true);preview.setMinimumHeight(200);root.addView(preview);
-    TextView note=new TextView(this);note.setText("Choose 1, 2, 4 or 6 portraits (35 x 45 mm each), with white cutting gaps and thin borders. Use a front-facing, properly lit photo with a plain background. Crop is centered; review before printing.");root.addView(note);
+    cropButton=new Button(this);cropButton.setText("CROP & POSITION PHOTO (EXACT SELECTED SIZE)");root.addView(cropButton);
+    cropButton.setOnClickListener(v->showCropEditor());
+    TextView note=new TextView(this);note.setText("Choose 1, 2, 4 or 6 portraits (35 x 45 mm each), with white cutting gaps and thin borders. Use a front-facing, properly lit photo with a plain background. Choose the country size, then use Crop & Position to adjust headroom and framing. Printed dimensions stay exact.");root.addView(note);
     TextView sizeLabel=new TextView(this);sizeLabel.setText("Photo size preset (confirm official application rules)");root.addView(sizeLabel);
     Spinner sizes=new Spinner(this);ArrayAdapter<String> sizeAdapter=new ArrayAdapter<>(this,android.R.layout.simple_spinner_dropdown_item,sizeNames);sizes.setAdapter(sizeAdapter);
     sizes.setOnItemSelectedListener(new android.widget.AdapterView.OnItemSelectedListener(){
-      public void onItemSelected(android.widget.AdapterView<?> parent,View view,int position,long id){sizeIndex=position;updateSheet();}
+      public void onItemSelected(android.widget.AdapterView<?> parent,View view,int position,long id){sizeIndex=position;cropArea=null;updateSheet();}
       public void onNothingSelected(android.widget.AdapterView<?> parent){}
     });root.addView(sizes);
     TextView countLabel=new TextView(this);countLabel.setText("Photo copies on selected sheet");countLabel.setTextSize(17);root.addView(countLabel);
@@ -133,7 +137,7 @@ public class PassportActivity extends Activity {
   @Override protected void onActivityResult(int req,int result,Intent data){
     super.onActivityResult(req,result,data);
     if(result!=RESULT_OK||data==null)return;
-    if(req==CAMERA){Object taken=data.getExtras()==null?null:data.getExtras().get("data");if(taken instanceof Bitmap){photo=(Bitmap)taken;refreshPreview();status.setText("Camera image loaded. Review resolution and preview before printing.");}else status.setText("Camera returned no image.");return;}
+    if(req==CAMERA){Object taken=data.getExtras()==null?null:data.getExtras().get("data");if(taken instanceof Bitmap){photo=(Bitmap)taken;cropArea=null;refreshPreview();status.setText("Camera image loaded. Review resolution and preview before printing.");}else status.setText("Camera returned no image.");return;}
     if(data.getData()==null)return;
     if(req==SAVE){try(OutputStream out=getContentResolver().openOutputStream(data.getData())){PdfDocument doc=makePdf();doc.writeTo(out);doc.close();status.setText("4R PDF saved.");}catch(Exception e){status.setText("Save failed: "+e.getMessage());}return;}
     if(req==PICK){try{
@@ -141,7 +145,7 @@ public class PassportActivity extends Activity {
       try(InputStream in=getContentResolver().openInputStream(data.getData())){BitmapFactory.decodeStream(in,null,o);}
       o.inSampleSize=1;while(Math.max(o.outWidth/o.inSampleSize,o.outHeight/o.inSampleSize)>2000)o.inSampleSize*=2;
       o.inJustDecodeBounds=false;
-      try(InputStream in=getContentResolver().openInputStream(data.getData())){photo=BitmapFactory.decodeStream(in,null,o);}
+      try(InputStream in=getContentResolver().openInputStream(data.getData())){photo=BitmapFactory.decodeStream(in,null,o);cropArea=null;}
       if(photo==null)throw new IOException("Invalid image");
       refreshPreview();status.setText("Photo loaded. Check face position before printing.");
     }catch(Exception e){status.setText("Photo error: "+e.getMessage());}}
@@ -227,10 +231,77 @@ public class PassportActivity extends Activity {
       float desired=w/h,ratio=(float)outputPhoto.getWidth()/outputPhoto.getHeight();
       int sw=outputPhoto.getWidth(),sh=outputPhoto.getHeight();
       Rect source;
-      if(ratio>desired){int cw=Math.round(sh*desired);int x0=(sw-cw)/2;source=new Rect(x0,0,x0+cw,sh);}
+      if(cropArea!=null){source=new Rect(Math.max(0,Math.round(cropArea.left*sw)),Math.max(0,Math.round(cropArea.top*sh)),Math.min(sw,Math.round(cropArea.right*sw)),Math.min(sh,Math.round(cropArea.bottom*sh)));}
+      else if(ratio>desired){int cw=Math.round(sh*desired);int x0=(sw-cw)/2;source=new Rect(x0,0,x0+cw,sh);}
       else{int ch=Math.round(sw/desired);int y0=(sh-ch)/2;source=new Rect(0,y0,sw,y0+ch);}
       canvas.drawBitmap(outputPhoto,source,target,imagePaint);canvas.drawRect(target,border);
     }
+  }
+
+  void showCropEditor(){
+    if(photo==null){status.setText("Select a portrait first.");return;}
+    final float aspect=widths[sizeIndex]/heights[sizeIndex];
+    final float imageAspect=(float)photo.getWidth()/photo.getHeight();
+    final float initialW=imageAspect>aspect?aspect/imageAspect:1f;
+    final float initialH=imageAspect>aspect?1f:imageAspect/aspect;
+    final RectF selection=cropArea==null?new RectF((1-initialW)/2,(1-initialH)/2,(1+initialW)/2,(1+initialH)/2):new RectF(cropArea);
+    final LinearLayout layout=new LinearLayout(this);layout.setOrientation(1);layout.setPadding(16,8,16,8);
+    TextView help=new TextView(this);help.setText("Drag inside the frame to move it. Drag a corner to resize. The crop ratio is locked to "+widths[sizeIndex]+" x "+heights[sizeIndex]+" mm. Leave space above the hair.");layout.addView(help);
+    View editor=new View(this){
+      final Paint paint=new Paint(3);
+      float x0,y0,displayW,displayH,downX,downY;
+      RectF start=new RectF();int mode=0;
+      @Override protected void onDraw(Canvas c){
+        c.drawColor(Color.rgb(30,35,44));
+        float fit=Math.min((getWidth()-12f)/photo.getWidth(),(getHeight()-12f)/photo.getHeight());
+        displayW=photo.getWidth()*fit;displayH=photo.getHeight()*fit;
+        x0=(getWidth()-displayW)/2;y0=(getHeight()-displayH)/2;
+        paint.setColor(Color.WHITE);paint.setStyle(Paint.Style.FILL);
+        c.drawBitmap(photo,null,new RectF(x0,y0,x0+displayW,y0+displayH),paint);
+        float l=x0+selection.left*displayW,t=y0+selection.top*displayH,r=x0+selection.right*displayW,b=y0+selection.bottom*displayH;
+        paint.setColor(0x99000000);c.drawRect(x0,y0,x0+displayW,t,paint);c.drawRect(x0,b,x0+displayW,y0+displayH,paint);
+        c.drawRect(x0,t,l,b,paint);c.drawRect(r,t,x0+displayW,b,paint);
+        paint.setColor(Color.WHITE);paint.setStyle(Paint.Style.STROKE);paint.setStrokeWidth(3);c.drawRect(l,t,r,b,paint);
+        paint.setStyle(Paint.Style.FILL);
+        for(float[] p:new float[][]{{l,t},{r,t},{l,b},{r,b}}){paint.setColor(Color.rgb(0,200,255));c.drawCircle(p[0],p[1],10,paint);}
+      }
+      @Override public boolean onTouchEvent(android.view.MotionEvent e){
+        float x=(e.getX()-x0)/Math.max(1,displayW),y=(e.getY()-y0)/Math.max(1,displayH);
+        if(e.getAction()==MotionEvent.ACTION_DOWN){
+          downX=x;downY=y;start.set(selection);
+          float d=Float.MAX_VALUE;int nearest=0;
+          float[][] corners={{selection.left,selection.top},{selection.right,selection.top},{selection.left,selection.bottom},{selection.right,selection.bottom}};
+          for(int i=0;i<4;i++){float dx=(x-corners[i][0])*displayW,dy=(y-corners[i][1])*displayH;float dd=dx*dx+dy*dy;if(dd<d){d=dd;nearest=i;}}
+          mode=d<55*55?nearest+2:1;return true;
+        }
+        if(e.getAction()==MotionEvent.ACTION_MOVE){
+          if(mode==1){
+            float dx=Math.max(-start.left,Math.min(1-start.right,x-downX)),dy=Math.max(-start.top,Math.min(1-start.bottom,y-downY));
+            selection.set(start.left+dx,start.top+dy,start.right+dx,start.bottom+dy);
+          }else{
+            // Resize around the diagonally opposite fixed corner, preserving the chosen physical aspect ratio.
+            boolean left=mode==2||mode==4,top=mode==2||mode==3;
+            float anchorX=left?start.right:start.left,anchorY=top?start.bottom:start.top;
+            float requestedW=Math.abs(x-anchorX),requestedH=Math.abs(y-anchorY);
+            float normalizedRatio=aspect/imageAspect;
+            float maxW=left?anchorX:1-anchorX,maxH=top?anchorY:1-anchorY;
+            float newW=Math.max(.12f,Math.min(maxW,Math.min(requestedW,requestedH*normalizedRatio)));
+            float newH=newW/normalizedRatio;
+            if(newH>maxH){newH=maxH;newW=newH*normalizedRatio;}
+            selection.set(left?anchorX-newW:anchorX,top?anchorY-newH:anchorY,left?anchorX:anchorX+newW,top?anchorY:anchorY+newH);
+          }
+          invalidate();return true;
+        }
+        return true;
+      }
+    };
+    layout.addView(editor,new LinearLayout.LayoutParams(-1,(int)(getResources().getDisplayMetrics().heightPixels*.48f)));
+    TextView dimensions=new TextView(this);dimensions.setText("Output: "+widths[sizeIndex]+" x "+heights[sizeIndex]+" mm • crop ratio locked • no stretching");layout.addView(dimensions);
+    new android.app.AlertDialog.Builder(this).setTitle("Precise Passport Photo Crop").setView(layout)
+      .setNegativeButton("Cancel",(d,w)->{})
+      .setNeutralButton("Reset",(d,w)->{cropArea=null;updateSheet();})
+      .setPositiveButton("Apply Crop",(d,w)->{cropArea=new RectF(selection);updateSheet();status.setText("Crop applied. Printed photo size remains "+widths[sizeIndex]+" x "+heights[sizeIndex]+" mm.");})
+      .show();
   }
   void printSheet(){
     PrintManager manager=(PrintManager)getSystemService(PRINT_SERVICE);
