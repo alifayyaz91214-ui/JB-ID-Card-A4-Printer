@@ -101,6 +101,8 @@ public class MainActivity extends Activity {
     positions.check(721);positions.setOnCheckedChangeListener((g,id)->{verticalPosition=id-720;updateSheet();});advanced.addView(positions);
     root.addView(section("Multiple ID cards from one document"));
     addButton(root,"Open JPG / PNG / PDF document",()->{Intent i=new Intent(Intent.ACTION_OPEN_DOCUMENT);i.setType("*/*");i.addCategory(Intent.CATEGORY_OPENABLE);i.putExtra(Intent.EXTRA_MIME_TYPES,new String[]{"image/jpeg","image/png","image/webp","application/pdf"});startActivityForResult(i,PICK_DOCUMENT);});
+    addButton(root,"✂  Select first card FRONT",()->openCrop(sourceDocument,CROP_FRONT));
+    addButton(root,"✂  Select first card BACK",()->openCrop(sourceDocument,CROP_BACK));
     addButton(root,"✂  Select second card FRONT",()->openCrop(sourceDocument,CROP_SECOND_FRONT));
     addButton(root,"✂  Select second card BACK",()->openCrop(sourceDocument,CROP_SECOND_BACK));
     addButton(root,"Swap which card prints first",()->{secondFirst=!secondFirst;refresh();status.setText(secondFirst?"Second ID card prints first.":"First ID card prints first.");});
