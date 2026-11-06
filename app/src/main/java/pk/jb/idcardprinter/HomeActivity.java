@@ -85,7 +85,7 @@ public class HomeActivity extends Activity {
   void service(LinearLayout root,String symbol,String title,String desc,Class<?> destination){
     LinearLayout box=new LinearLayout(this);box.setOrientation(LinearLayout.VERTICAL);box.setPadding(20,20,20,20);box.setBackground(shape(Color.WHITE));
     LinearLayout.LayoutParams lp=new LinearLayout.LayoutParams(-1,-2);lp.bottomMargin=22;root.addView(box,lp);
-    ServiceArt illustration=new ServiceArt(destination==MainActivity.class);
+    ServiceArt illustration=new ServiceArt(destination==MainActivity.class||destination==SingleCardActivity.class);
     LinearLayout.LayoutParams artLp=new LinearLayout.LayoutParams(-1,210);artLp.bottomMargin=14;box.addView(illustration,artLp);
     TextView heading=text(symbol+"   "+title,20,true,navy);box.addView(heading);
     TextView detail=text(desc,14,false,Color.rgb(92,108,130));detail.setPadding(0,12,0,18);box.addView(detail);
@@ -100,9 +100,10 @@ public class HomeActivity extends Activity {
     LinearLayout.LayoutParams bannerLp=new LinearLayout.LayoutParams(-1,125);bannerLp.bottomMargin=14;root.addView(banner,bannerLp);
     TextView title=text("Choose a service",27,true,navy);title.setPadding(0,4,0,8);root.addView(title);
     TextView sub=text("Tap a service to get started. Simple, offline and ready to print.",15,false,Color.rgb(92,108,130));sub.setPadding(0,0,0,20);root.addView(sub);
-    service(root,"01","ID Card A4 Printer","Capture both sides, crop and print on A4.",MainActivity.class);
-    service(root,"02","Passport Photo Studio","Make passport photos in the correct size.",PassportActivity.class);
-    service(root,"03","A4 Photo Copy Studio","Scan documents and print clean A4 copies.",PhotoCopyActivity.class);
+    service(root,"01","Single ID Card Printer","One ID card: Front + Back, crop and print on A4.",SingleCardActivity.class);
+    service(root,"02","Multiple ID Card Printer","Two to four ID cards: auto-detect, crop and mix copies on A4.",MainActivity.class);
+    service(root,"03","Passport Photo Studio","Make passport photos in the correct size.",PassportActivity.class);
+    service(root,"04","A4 Photo Copy Studio","Scan documents and print clean A4 copies.",PhotoCopyActivity.class);
     TextView footer=text("LOCAL PROCESSING  •  NO ACCOUNT REQUIRED",12,true,Color.rgb(92,108,130));footer.setGravity(Gravity.CENTER);footer.setPadding(0,18,0,0);root.addView(footer);
     setContentView(scroll);
   }
