@@ -13,7 +13,7 @@ import android.widget.*;
 import java.io.*;
 
 public class PassportActivity extends Activity {
-  static final int PICK=201,SAVE=202,CAMERA=203;
+  static final int PICK=201,SAVE=202,CAMERA=203,SAVE_JPG=204;
   Bitmap photo;
   RectF cropArea=null; // normalized crop coordinates, shared by preview and PDF
   Button cropButton;
@@ -114,6 +114,7 @@ public class PassportActivity extends Activity {
     });root.addView(bg);
     TextView editNote=new TextView(this);editNote.setText("Background replacement uses corner-color matching, not AI person segmentation. Review hair edges and official photo rules. Clothes change requires a separate AI model and is not available yet.");root.addView(editNote);
     TextView fitting=new TextView(this);fitting.setText("Larger sizes may fit fewer photos on 4R. The PDF will never shrink the selected physical photo size.");root.addView(fitting);
+    Button jpg=new Button(this);jpg.setText("Save selected sheet as JPG");root.addView(jpg);jpg.setOnClickListener(v->{if(ready())JpgExport.choose(this,SAVE_JPG,a4?"JB-Passport-Photos-A4.jpg":"JB-Passport-Photos-4R.jpg");});
     Button pdf=new Button(this);pdf.setText("Save selected sheet as PDF");root.addView(pdf);
     pdf.setOnClickListener(v->{if(!ready())return;Intent i=new Intent(Intent.ACTION_CREATE_DOCUMENT);i.setType("application/pdf");i.addCategory(Intent.CATEGORY_OPENABLE);i.putExtra(Intent.EXTRA_TITLE,a4?"JB-Passport-Photos-A4.pdf":"JB-Passport-Photos-4R.pdf");startActivityForResult(i,SAVE);});
     Button print=new Button(this);print.setText("Print selected sheet directly");root.addView(print);print.setOnClickListener(v->{if(ready())printSheet();});
@@ -139,6 +140,7 @@ public class PassportActivity extends Activity {
     if(result!=RESULT_OK||data==null)return;
     if(req==CAMERA){Object taken=data.getExtras()==null?null:data.getExtras().get("data");if(taken instanceof Bitmap){photo=(Bitmap)taken;cropArea=null;refreshPreview();status.setText("Camera image loaded. Review resolution and preview before printing.");}else status.setText("Camera returned no image.");return;}
     if(data.getData()==null)return;
+    if(req==SAVE_JPG){try{final int pw=a4?595:289,ph=a4?842:431;final int jw=a4?2480:1205,jh=a4?3508:1795;final Bitmap image=editedPhoto(2000);JpgExport.save(this,data.getData(),jw,jh,c->{c.scale((float)jw/pw,(float)jh/ph);drawSheet(c,pw,ph,image);});status.setText("JPG photo sheet saved.");}catch(Exception e){status.setText("JPG save failed: "+e.getMessage());}return;}
     if(req==SAVE){try(OutputStream out=getContentResolver().openOutputStream(data.getData())){PdfDocument doc=makePdf();doc.writeTo(out);doc.close();status.setText("4R PDF saved.");}catch(Exception e){status.setText("Save failed: "+e.getMessage());}return;}
     if(req==PICK){try{
       BitmapFactory.Options o=new BitmapFactory.Options();o.inJustDecodeBounds=true;
