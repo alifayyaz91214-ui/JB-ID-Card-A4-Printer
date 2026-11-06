@@ -15,7 +15,7 @@ import android.text.*;
 import java.io.*;
 
 public class PhotoCopyActivity extends Activity {
-  static final int PICK=901,SAVE=902,CAMERA=903;
+  static final int PICK=901,SAVE=902,CAMERA=903,SAVE_JPG=904;
   Uri cameraUri;
   boolean scanMode=true;
   boolean removeShadows=false;
@@ -91,6 +91,7 @@ public class PhotoCopyActivity extends Activity {
       public void onStopTrackingTouch(SeekBar b){}
     });
     TextView tip=new TextView(this);tip.setText("One document fills each A4 page with small printer-safe margins. Copies create separate full-size pages. Preview and PDF use identical settings.");root.addView(tip);
+    Button jpg=new Button(this);jpg.setText("Save A4 as JPG");root.addView(jpg);jpg.setOnClickListener(v->{if(ready())JpgExport.choose(this,SAVE_JPG,"JB-A4-Photo-Copy.jpg");});
     Button save=new Button(this);save.setText("Save A4 PDF");root.addView(save);
     save.setOnClickListener(v->{if(!ready())return;Intent i=new Intent(Intent.ACTION_CREATE_DOCUMENT);i.setType("application/pdf");i.addCategory(Intent.CATEGORY_OPENABLE);i.putExtra(Intent.EXTRA_TITLE,"JB-A4-Photo-Copies.pdf");startActivityForResult(i,SAVE);});
     Button print=new Button(this);print.setText("Print A4 directly");root.addView(print);print.setOnClickListener(v->{if(ready())printSheet();});
@@ -136,6 +137,7 @@ public class PhotoCopyActivity extends Activity {
     super.onActivityResult(request,result,data);if(result!=RESULT_OK)return;
     Uri selected=request==CAMERA?cameraUri:(data==null?null:data.getData());
     if(selected==null)return;
+    if(request==SAVE_JPG){try{JpgExport.save(this,data.getData(),2480,3508,c->{c.scale(2480f/595f,3508f/842f);drawPhotos(c);});status.setText("A4 JPG saved (one page).");}catch(Exception e){status.setText("JPG save failed: "+e.getMessage());}return;}
     if(request==SAVE){try(OutputStream out=getContentResolver().openOutputStream(data.getData())){PdfDocument d=makePdf();d.writeTo(out);d.close();status.setText("A4 PDF saved.");}catch(Exception e){status.setText("Save error: "+e.getMessage());}return;}
     if(request==PICK||request==CAMERA){
       status.setText("Loading document safely...");
