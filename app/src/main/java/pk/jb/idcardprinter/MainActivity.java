@@ -16,6 +16,9 @@ import java.io.*;
 
 public class MainActivity extends Activity {
   Bitmap front, back, originalFront, originalBack;
+  Bitmap secondFront,secondBack;
+  Uri sourceDocument;
+  boolean secondFirst=false;
   Uri frontUri, backUri;
   ImageView frontView, backView;
   TextView status;
@@ -26,7 +29,7 @@ public class MainActivity extends Activity {
   int brightness=10;
   int copyCount=5;
   int verticalPosition=1; // 0 top, 1 center, 2 bottom
-  static final int PICK_FRONT=101, PICK_BACK=102, SAVE=103, CROP_FRONT=104, CROP_BACK=105, CAMERA_FRONT=106, CAMERA_BACK=107, SAVE_JPG=108;
+  static final int PICK_FRONT=101, PICK_BACK=102, SAVE=103, CROP_FRONT=104, CROP_BACK=105, CAMERA_FRONT=106, CAMERA_BACK=107, SAVE_JPG=108, PICK_DOCUMENT=109, CROP_SECOND_FRONT=110, CROP_SECOND_BACK=111;
   int navy=Color.rgb(23,43,72),accent=Color.rgb(25,105,205);
   GradientDrawable rounded(int color,int radius){GradientDrawable d=new GradientDrawable();d.setColor(color);d.setCornerRadius(radius);return d;}
   TextView section(String title){TextView t=new TextView(this);t.setText(title);t.setTextColor(navy);t.setTextSize(18);t.setTypeface(null,Typeface.BOLD);t.setPadding(4,18,4,8);return t;}
@@ -54,16 +57,16 @@ public class MainActivity extends Activity {
     root.addView(section("1  Front of ID card"));
     addButton(root,"📷  Capture front",()->openCamera(CAMERA_FRONT));
     addButton(root,"Choose existing front photo",()->pick(PICK_FRONT)); root.addView(frontView);
+    addButton(root,"✂  Front manual crop",()->openCrop(frontUri,CROP_FRONT));
     root.addView(section("2  Back of ID card"));
     addButton(root,"📷  Capture back",()->openCamera(CAMERA_BACK));
     addButton(root,"Choose existing back photo",()->pick(PICK_BACK)); root.addView(backView);
+    addButton(root,"✂  Back manual crop",()->openCrop(backUri,CROP_BACK));
     Button advancedToggle=new Button(this);advancedToggle.setText("⚙  More options");styleAction(advancedToggle,false);root.addView(advancedToggle);
     LinearLayout advanced=new LinearLayout(this);advanced.setOrientation(1);advanced.setPadding(12,12,12,12);advanced.setBackground(rounded(Color.WHITE,22));advanced.setVisibility(View.GONE);root.addView(advanced);
     advancedToggle.setOnClickListener(v->{boolean show=advanced.getVisibility()!=View.VISIBLE;advanced.setVisibility(show?View.VISIBLE:View.GONE);advancedToggle.setText(show?"Hide extra options":"⚙  More options");});
     addButton(advanced,"Rotate FRONT 90°",()->rotateCard(true));
     addButton(advanced,"Rotate BACK 90°",()->rotateCard(false));
-    addButton(advanced,"Manual crop FRONT (4 corners)",()->openCrop(frontUri,CROP_FRONT));
-    addButton(advanced,"Manual crop BACK (4 corners)",()->openCrop(backUri,CROP_BACK));
     addButton(advanced,"Auto crop both photos",()->{if(!ready())return;Bitmap f=autoCrop(originalFront!=null?originalFront:front);Bitmap croppedBack=autoCrop(originalBack!=null?originalBack:back);boolean fc=f!=(originalFront!=null?originalFront:front),bc=croppedBack!=(originalBack!=null?originalBack:back);front=f;back=croppedBack;refresh();status.setText("Front: "+(fc?"cropped":"NOT detected")+" | Back: "+(bc?"cropped":"NOT detected")+". Use Manual Crop if not detected.");});
     TextView printLabel=new TextView(this);printLabel.setText("Print quality / color mode");printLabel.setTextSize(17);advanced.addView(printLabel);
     RadioGroup modes=new RadioGroup(this);modes.setOrientation(RadioGroup.VERTICAL);
@@ -96,6 +99,12 @@ public class MainActivity extends Activity {
     String[] positionNames={"Top","Center","Bottom"};
     for(int i=0;i<3;i++){RadioButton rb=new RadioButton(this);rb.setId(720+i);rb.setText(positionNames[i]);positions.addView(rb);}
     positions.check(721);positions.setOnCheckedChangeListener((g,id)->{verticalPosition=id-720;updateSheet();});advanced.addView(positions);
+    root.addView(section("Multiple ID cards from one document"));
+    addButton(root,"Open JPG / PNG / PDF document",()->{Intent i=new Intent(Intent.ACTION_OPEN_DOCUMENT);i.setType("*/*");i.addCategory(Intent.CATEGORY_OPENABLE);i.putExtra(Intent.EXTRA_MIME_TYPES,new String[]{"image/jpeg","image/png","image/webp","application/pdf"});startActivityForResult(i,PICK_DOCUMENT);});
+    addButton(root,"✂  Select second card FRONT",()->openCrop(sourceDocument,CROP_SECOND_FRONT));
+    addButton(root,"✂  Select second card BACK",()->openCrop(sourceDocument,CROP_SECOND_BACK));
+    addButton(root,"Swap which card prints first",()->{secondFirst=!secondFirst;refresh();status.setText(secondFirst?"Second ID card prints first.":"First ID card prints first.");});
+    addButton(root,"Clear second ID card",()->{secondFront=null;secondBack=null;refresh();status.setText("Second ID card removed.");});
     root.addView(section("3  Print or save"));
     addButton(root,"🖨  Print A4",()->{if(!ready())return;printSheet();});
     addButton(root,"Save as JPG",()->{if(ready())JpgExport.choose(this,SAVE_JPG,"JB-ID-Cards-A4.jpg");});
@@ -109,7 +118,7 @@ public class MainActivity extends Activity {
   @Override protected void onActivityResult(int request,int result,Intent data){
     super.onActivityResult(request,result,data);
     if(result!=RESULT_OK||data==null)return;
-    if(request!=CROP_FRONT&&request!=CROP_BACK&&request!=CAMERA_FRONT&&request!=CAMERA_BACK&&data.getData()==null)return;
+    if(request!=CROP_FRONT&&request!=CROP_BACK&&request!=CROP_SECOND_FRONT&&request!=CROP_SECOND_BACK&&request!=CAMERA_FRONT&&request!=CAMERA_BACK&&data.getData()==null)return;
     if(request==CAMERA_FRONT||request==CAMERA_BACK){
       final boolean isFront=request==CAMERA_FRONT;final String path=data.getStringExtra("cameraPath");
       if(path==null)return;status.setText("Straightening captured card...");
@@ -122,7 +131,8 @@ public class MainActivity extends Activity {
         runOnUiThread(()->{if(isFinishing()||isDestroyed())return;if(failure!=null){status.setText("Camera image error: "+failure);return;}if(isFront){originalFront=source;front=resultBitmap;frontUri=Uri.fromFile(new File(path));}else{originalBack=source;back=resultBitmap;backUri=Uri.fromFile(new File(path));}refresh();if(resultBitmap==source){status.setText("Card edges not detected. Opening 4-corner crop so hands and background are removed.");openCrop(Uri.fromFile(new File(path)),isFront?CROP_FRONT:CROP_BACK);}else{status.setText("Card captured and perspective-straightened. Check edges in preview.");}});
       }).start();return;
     }
-    if(request==CROP_FRONT||request==CROP_BACK){try{String path=data.getStringExtra("cropPath");Bitmap bmp=BitmapFactory.decodeFile(path);if(bmp==null)throw new IOException("Cropped image unavailable");if(request==CROP_FRONT)front=bmp;else back=bmp;refresh();status.setText("Manual crop saved.");}catch(Exception e){status.setText("Crop error: "+e.getMessage());}return;}
+    if(request==PICK_DOCUMENT){sourceDocument=data.getData();try{String mime=getContentResolver().getType(sourceDocument);if("application/pdf".equals(mime)){android.graphics.pdf.PdfRenderer renderer=new android.graphics.pdf.PdfRenderer(getContentResolver().openFileDescriptor(sourceDocument,"r"));android.graphics.pdf.PdfRenderer.Page page=renderer.openPage(0);float scale=Math.min(2.5f,2200f/Math.max(page.getWidth(),page.getHeight()));Bitmap image=Bitmap.createBitmap(Math.max(1,(int)(page.getWidth()*scale)),Math.max(1,(int)(page.getHeight()*scale)),Bitmap.Config.ARGB_8888);image.eraseColor(Color.WHITE);page.render(image,null,null,android.graphics.pdf.PdfRenderer.Page.RENDER_MODE_FOR_DISPLAY);page.close();renderer.close();File file=new File(getCacheDir(),"jb-imported-document.png");try(FileOutputStream out=new FileOutputStream(file)){image.compress(Bitmap.CompressFormat.PNG,100,out);}sourceDocument=Uri.fromFile(file);status.setText("PDF page 1 loaded. Select each ID card using the crop buttons.");}else{status.setText("Image loaded. Select each ID card using the crop buttons.");}}catch(Exception e){status.setText("Document import failed: "+e.getMessage());}return;}
+    if(request==CROP_FRONT||request==CROP_BACK||request==CROP_SECOND_FRONT||request==CROP_SECOND_BACK){try{String path=data.getStringExtra("cropPath");Bitmap bmp=BitmapFactory.decodeFile(path);if(bmp==null)throw new IOException("Cropped image unavailable");if(request==CROP_FRONT)front=bmp;else if(request==CROP_BACK)back=bmp;else if(request==CROP_SECOND_FRONT)secondFront=bmp;else secondBack=bmp;refresh();status.setText("Selected card crop saved.");}catch(Exception e){status.setText("Crop error: "+e.getMessage());}return;}
     if(request==SAVE_JPG){try{JpgExport.save(this,data.getData(),2480,3508,c->{c.scale(2480f/595f,3508f/842f);drawSheet(c);});status.setText("A4 JPG saved at 300 DPI.");}catch(Exception e){status.setText("JPG save failed: "+e.getMessage());}return;}
     if(request==SAVE){try(OutputStream out=getContentResolver().openOutputStream(data.getData())){PdfDocument pdf=makePdf();pdf.writeTo(out);pdf.close();status.setText("PDF saved successfully.");}catch(Exception e){status.setText("PDF error: "+e.getMessage());}return;}
     try{
@@ -202,8 +212,11 @@ public class MainActivity extends Activity {
     final float top=verticalPosition==0?Math.min(18f,freeSpace):(verticalPosition==2?Math.max(0,freeSpace-18f):freeSpace/2f);
     for(int row=0;row<copyCount;row++){
       float y=top+row*(cardH+rowGap);
-      if(front!=null)drawCard(c,front,x1,y,cardW,cardH);
-      if(back!=null)drawCard(c,back,x2,y,cardW,cardH);
+      boolean hasSecond=secondFront!=null&&secondBack!=null;
+      boolean useSecond=hasSecond&&(secondFirst?row<copyCount/2:row>=copyCount/2);
+      Bitmap f=useSecond?secondFront:front,b=useSecond?secondBack:back;
+      if(f!=null)drawCard(c,f,x1,y,cardW,cardH);
+      if(b!=null)drawCard(c,b,x2,y,cardW,cardH);
     }
   }
   void drawCard(Canvas c,Bitmap bmp,float x,float y,float w,float h){
