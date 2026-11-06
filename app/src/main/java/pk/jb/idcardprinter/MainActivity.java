@@ -25,7 +25,7 @@ public class MainActivity extends Activity {
   int brightness=10;
   int copyCount=5;
   int verticalPosition=1; // 0 top, 1 center, 2 bottom
-  static final int PICK_FRONT=101, PICK_BACK=102, SAVE=103, CROP_FRONT=104, CROP_BACK=105;
+  static final int PICK_FRONT=101, PICK_BACK=102, SAVE=103, CROP_FRONT=104, CROP_BACK=105, CAMERA_FRONT=106, CAMERA_BACK=107;
   @Override public void onCreate(Bundle b) {
     super.onCreate(b);
     try{cvReady=org.opencv.android.OpenCVLoader.initLocal();}catch(Throwable e){cvReady=false;}
@@ -46,8 +46,10 @@ public class MainActivity extends Activity {
     frontView=new ImageView(this); backView=new ImageView(this);
     frontView.setAdjustViewBounds(true); backView.setAdjustViewBounds(true);
     frontView.setMinimumHeight(130); backView.setMinimumHeight(130);
-    addButton(root,"1. Select FRONT photo",()->pick(PICK_FRONT)); root.addView(frontView);
-    addButton(root,"2. Select BACK photo",()->pick(PICK_BACK)); root.addView(backView);
+    addButton(root,"1. Capture FRONT with camera",()->openCamera(CAMERA_FRONT));
+    addButton(root,"Choose FRONT from gallery",()->pick(PICK_FRONT)); root.addView(frontView);
+    addButton(root,"2. Capture BACK with camera",()->openCamera(CAMERA_BACK));
+    addButton(root,"Choose BACK from gallery",()->pick(PICK_BACK)); root.addView(backView);
     addButton(root,"Rotate FRONT 90°",()->rotateCard(true));
     addButton(root,"Rotate BACK 90°",()->rotateCard(false));
     addButton(root,"Manual crop FRONT (4 corners)",()->openCrop(frontUri,CROP_FRONT));
@@ -90,11 +92,24 @@ public class MainActivity extends Activity {
   }
   void addButton(LinearLayout root,String name,Runnable action){Button b=new Button(this);b.setText(name);root.addView(b);b.setOnClickListener(v->action.run());}
   void openCrop(Uri uri,int code){if(uri==null){status.setText("Select the photo first.");return;}Intent i=new Intent(this,CropActivity.class);i.setData(uri);startActivityForResult(i,code);}
+  void openCamera(int code){Intent i=new Intent(this,CardCameraActivity.class);startActivityForResult(i,code);}
   void pick(int code){Intent i=new Intent(Intent.ACTION_GET_CONTENT);i.setType("image/*");startActivityForResult(i,code);}
   @Override protected void onActivityResult(int request,int result,Intent data){
     super.onActivityResult(request,result,data);
     if(result!=RESULT_OK||data==null)return;
-    if(request!=CROP_FRONT&&request!=CROP_BACK&&data.getData()==null)return;
+    if(request!=CROP_FRONT&&request!=CROP_BACK&&request!=CAMERA_FRONT&&request!=CAMERA_BACK&&data.getData()==null)return;
+    if(request==CAMERA_FRONT||request==CAMERA_BACK){
+      final boolean isFront=request==CAMERA_FRONT;final String path=data.getStringExtra("cameraPath");
+      if(path==null)return;status.setText("Straightening captured card...");
+      new Thread(()->{Bitmap bmp=null;Bitmap cropped=null;String error=null;
+        try{BitmapFactory.Options opts=new BitmapFactory.Options();opts.inJustDecodeBounds=true;BitmapFactory.decodeFile(path,opts);opts.inSampleSize=1;while(Math.max(opts.outWidth/opts.inSampleSize,opts.outHeight/opts.inSampleSize)>2400)opts.inSampleSize*=2;opts.inJustDecodeBounds=false;bmp=BitmapFactory.decodeFile(path,opts);if(bmp==null)throw new IOException("Camera photo unavailable");
+          android.media.ExifInterface exif=new android.media.ExifInterface(path);int orientation=exif.getAttributeInt(android.media.ExifInterface.TAG_ORIENTATION,1);int angle=orientation==6?90:(orientation==3?180:(orientation==8?270:0));if(angle!=0){Matrix m=new Matrix();m.postRotate(angle);bmp=Bitmap.createBitmap(bmp,0,0,bmp.getWidth(),bmp.getHeight(),m,true);}
+          cropped=autoCrop(bmp);
+        }catch(Exception e){error=e.getMessage();}
+        final Bitmap source=bmp,resultBitmap=cropped;final String failure=error;
+        runOnUiThread(()->{if(isFinishing()||isDestroyed())return;if(failure!=null){status.setText("Camera image error: "+failure);return;}if(isFront){originalFront=source;front=resultBitmap;frontUri=Uri.fromFile(new File(path));}else{originalBack=source;back=resultBitmap;backUri=Uri.fromFile(new File(path));}refresh();status.setText(resultBitmap==source?"Card captured; auto perspective detection was uncertain. Use Manual Crop if needed.":"Card captured and perspective-straightened. Check edges in preview.");});
+      }).start();return;
+    }
     if(request==CROP_FRONT||request==CROP_BACK){try{String path=data.getStringExtra("cropPath");Bitmap bmp=BitmapFactory.decodeFile(path);if(bmp==null)throw new IOException("Cropped image unavailable");if(request==CROP_FRONT)front=bmp;else back=bmp;refresh();status.setText("Manual crop saved.");}catch(Exception e){status.setText("Crop error: "+e.getMessage());}return;}
     if(request==SAVE){try(OutputStream out=getContentResolver().openOutputStream(data.getData())){PdfDocument pdf=makePdf();pdf.writeTo(out);pdf.close();status.setText("PDF saved successfully.");}catch(Exception e){status.setText("PDF error: "+e.getMessage());}return;}
     try{
