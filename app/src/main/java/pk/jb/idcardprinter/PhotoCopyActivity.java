@@ -18,6 +18,9 @@ public class PhotoCopyActivity extends Activity {
   static final int PICK=901,SAVE=902,CAMERA=903;
   Uri cameraUri;
   boolean scanMode=true;
+  boolean removeShadows=false;
+  Bitmap cleanedPhoto;
+  int shadowStrength=55;
   Bitmap photo;
   int copies=1,black=20,white=0;
   float photoW=35f,photoH=45f;
@@ -60,6 +63,11 @@ public class PhotoCopyActivity extends Activity {
     });
     CheckBox scan=new CheckBox(this);scan.setText("Document scan mode: crisp black text and clean white paper");scan.setChecked(true);root.addView(scan);
     scan.setOnCheckedChangeListener((button,checked)->{scanMode=checked;refresh();});
+    CheckBox shadows=new CheckBox(this);shadows.setText("Remove Shadows / Uneven Lighting (preserve text and stamps)");root.addView(shadows);
+    shadows.setOnCheckedChangeListener((b,checked)->{removeShadows=checked;rebuildCleaned();});
+    TextView strengthLabel=new TextView(this);strengthLabel.setText("Shadow removal strength: 55");root.addView(strengthLabel);
+    SeekBar shadowBar=new SeekBar(this);shadowBar.setMax(100);shadowBar.setProgress(55);root.addView(shadowBar);
+    shadowBar.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener(){public void onProgressChanged(SeekBar b,int v,boolean user){shadowStrength=v;strengthLabel.setText("Shadow removal strength: "+v);}public void onStartTrackingTouch(SeekBar b){}public void onStopTrackingTouch(SeekBar b){rebuildCleaned();}});
     TextView sizeInfo=new TextView(this);sizeInfo.setText("Paper: A4 (210 x 297 mm) • Full-page document • 1 document per page");sizeInfo.setTextSize(16);root.addView(sizeInfo);
     TextView quantity=new TextView(this);quantity.setText("Number of full A4 copies / pages");quantity.setTextSize(17);root.addView(quantity);
     count=new EditText(this);count.setSelectAllOnFocus(true);count.setInputType(android.text.InputType.TYPE_CLASS_NUMBER);count.setSingleLine(true);count.setText("1");root.addView(count);
@@ -106,14 +114,15 @@ public class PhotoCopyActivity extends Activity {
     gray.postConcat(tone);p.setColorFilter(new ColorMatrixColorFilter(gray));return p;
   }
   void drawPhotos(Canvas c){
-    if(photo==null)return;
+    Bitmap drawing=removeShadows&&cleanedPhoto!=null?cleanedPhoto:photo;
+    if(drawing==null)return;
     // Fill as much of A4 as possible without cutting or distorting the document.
     // The 8pt safety margin protects edges on ordinary office printers.
     final float margin=8f,availableW=595f-2*margin,availableH=842f-2*margin;
-    float scale=Math.min(availableW/photo.getWidth(),availableH/photo.getHeight());
-    float w=photo.getWidth()*scale,h=photo.getHeight()*scale;
+    float scale=Math.min(availableW/drawing.getWidth(),availableH/drawing.getHeight());
+    float w=drawing.getWidth()*scale,h=drawing.getHeight()*scale;
     float left=(595f-w)/2f,top=(842f-h)/2f;
-    c.drawBitmap(photo,null,new RectF(left,top,left+w,top+h),photoPaint());
+    c.drawBitmap(drawing,null,new RectF(left,top,left+w,top+h),photoPaint());
   }
   PdfDocument makePdf(){
     PdfDocument doc=new PdfDocument();
@@ -158,15 +167,45 @@ public class PhotoCopyActivity extends Activity {
         runOnUiThread(()->{
           if(isFinishing()||isDestroyed()){if(resultBitmap!=null)resultBitmap.recycle();return;}
           if(resultError!=null){if(resultBitmap!=null)resultBitmap.recycle();status.setText("Photo error: "+resultError);return;}
-          Bitmap old=photo;photo=resultBitmap;
+          Bitmap old=photo;photo=resultBitmap;cleanedPhoto=null;
           if(old!=null&&old!=resultBitmap)old.recycle();
           status.setText("Document loaded. Adjust scan settings and check A4 preview.");
-          refresh();
+          refresh();rebuildCleaned();
         });
       }).start();
     }
   }
 
+  void rebuildCleaned(){
+    if(!removeShadows||photo==null){cleanedPhoto=null;refresh();return;}
+    final Bitmap source=photo;final int strength=shadowStrength;
+    status.setText("Removing uneven lighting...");
+    new Thread(()->{
+      Bitmap result=null;String error=null;
+      org.opencv.core.Mat rgba=new org.opencv.core.Mat(),gray=new org.opencv.core.Mat(),background=new org.opencv.core.Mat(),normalized=new org.opencv.core.Mat(),mixed=new org.opencv.core.Mat();
+      try{
+        org.opencv.android.Utils.bitmapToMat(source,rgba);
+        org.opencv.imgproc.Imgproc.cvtColor(rgba,gray,org.opencv.imgproc.Imgproc.COLOR_RGBA2GRAY);
+        int k=Math.max(31,(Math.min(gray.cols(),gray.rows())/14)|1);
+        org.opencv.imgproc.Imgproc.GaussianBlur(gray,background,new org.opencv.core.Size(k,k),0);
+        org.opencv.core.Core.add(background,new org.opencv.core.Scalar(8),background);
+        org.opencv.core.Core.divide(gray,background,normalized,245);
+        org.opencv.core.Core.addWeighted(gray,1-strength/100.0,normalized,strength/100.0,0,mixed);
+        org.opencv.core.Mat output=new org.opencv.core.Mat();
+        org.opencv.imgproc.Imgproc.cvtColor(mixed,output,org.opencv.imgproc.Imgproc.COLOR_GRAY2RGBA);
+        result=Bitmap.createBitmap(output.cols(),output.rows(),Bitmap.Config.ARGB_8888);
+        org.opencv.android.Utils.matToBitmap(output,result);output.release();
+      }catch(Exception e){error=e.getMessage();}
+      finally{rgba.release();gray.release();background.release();normalized.release();mixed.release();}
+      final Bitmap cleaned=result;final String failure=error;
+      runOnUiThread(()->{
+        if(photo!=source){if(cleaned!=null)cleaned.recycle();return;}
+        cleanedPhoto=cleaned;
+        status.setText(failure==null?"Shadow correction applied. Check original details before printing.":"Shadow correction unavailable: "+failure);
+        refresh();
+      });
+    }).start();
+  }
   void printSheet(){
     PrintManager m=(PrintManager)getSystemService(PRINT_SERVICE);
     m.print("JB A4 Photo Copies",new PrintDocumentAdapter(){
