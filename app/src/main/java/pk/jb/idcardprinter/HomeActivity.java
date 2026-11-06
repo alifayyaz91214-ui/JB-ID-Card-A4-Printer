@@ -89,7 +89,7 @@ public class HomeActivity extends Activity {
     LinearLayout.LayoutParams artLp=new LinearLayout.LayoutParams(-1,210);artLp.bottomMargin=14;box.addView(illustration,artLp);
     TextView heading=text(symbol+"   "+title,20,true,navy);box.addView(heading);
     TextView detail=text(desc,14,false,Color.rgb(92,108,130));detail.setPadding(0,12,0,18);box.addView(detail);
-    Button open=new Button(this);open.setText("Open studio");open.setAllCaps(false);open.setTextColor(Color.WHITE);open.setBackground(shape(blue));box.addView(open);
+    Button open=new Button(this);open.setText("Open  →");open.setAllCaps(false);open.setTextSize(17);open.setTypeface(null,Typeface.BOLD);open.setPadding(12,14,12,14);open.setTextColor(Color.WHITE);open.setBackground(shape(blue));box.addView(open);
     open.setOnClickListener(v->startActivity(new Intent(this,destination)));
   }
   @Override public void onCreate(Bundle b){
@@ -98,11 +98,11 @@ public class HomeActivity extends Activity {
     LinearLayout root=new LinearLayout(this);root.setOrientation(1);root.setPadding(20,26,20,36);root.setBackgroundColor(Color.rgb(244,247,252));scroll.addView(root);
     BrandBanner banner=new BrandBanner();
     LinearLayout.LayoutParams bannerLp=new LinearLayout.LayoutParams(-1,125);bannerLp.bottomMargin=14;root.addView(banner,bannerLp);
-    TextView title=text("Your Print Studio",29,true,navy);title.setPadding(0,4,0,8);root.addView(title);
-    TextView sub=text("Professional ID copies and passport photos, prepared on your phone.",15,false,Color.rgb(92,108,130));sub.setPadding(0,0,0,20);root.addView(sub);
-    service(root,"01","ID Card A4 Printer","Auto crop, corner adjustment, print enhancement and 1-5 front/back copies.",MainActivity.class);
-    service(root,"02","Passport Photo Studio","Country size presets, 1-6 prints, cutting margins and 4R PDF.",PassportActivity.class);
-    service(root,"03","A4 Photo Copy Studio","One photo, custom copy count, darker blacks, controlled whites and live A4 preview.",PhotoCopyActivity.class);
+    TextView title=text("Choose a service",27,true,navy);title.setPadding(0,4,0,8);root.addView(title);
+    TextView sub=text("Tap a service to get started. Simple, offline and ready to print.",15,false,Color.rgb(92,108,130));sub.setPadding(0,0,0,20);root.addView(sub);
+    service(root,"01","ID Card A4 Printer","Capture both sides, crop and print on A4.",MainActivity.class);
+    service(root,"02","Passport Photo Studio","Make passport photos in the correct size.",PassportActivity.class);
+    service(root,"03","A4 Photo Copy Studio","Scan documents and print clean A4 copies.",PhotoCopyActivity.class);
     TextView footer=text("LOCAL PROCESSING  •  NO ACCOUNT REQUIRED",12,true,Color.rgb(92,108,130));footer.setGravity(Gravity.CENTER);footer.setPadding(0,18,0,0);root.addView(footer);
     setContentView(scroll);
   }
