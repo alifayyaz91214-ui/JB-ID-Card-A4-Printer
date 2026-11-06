@@ -22,6 +22,7 @@ public class MainActivity extends Activity {
   int[] cardCopies={4,4,4,4};
   Uri sourceDocument;
   boolean secondFirst=false;
+  boolean mixedA4=false;
   Uri frontUri, backUri;
   ImageView frontView, backView;
   TextView status;
@@ -106,11 +107,7 @@ public class MainActivity extends Activity {
     addButton(root,"Open JPG / PNG / PDF document",()->{Intent i=new Intent(Intent.ACTION_OPEN_DOCUMENT);i.setType("*/*");i.addCategory(Intent.CATEGORY_OPENABLE);i.putExtra(Intent.EXTRA_MIME_TYPES,new String[]{"image/jpeg","image/png","image/webp","application/pdf"});startActivityForResult(i,PICK_DOCUMENT);});
     addButton(root,"✂  Select card 1 FRONT",()->openCrop(sourceDocument,CROP_FRONT));
     addButton(root,"✂  Select card 1 BACK",()->openCrop(sourceDocument,CROP_BACK));
-    Spinner cardSelector=new Spinner(this);String[] cards={"Card 2","Card 3","Card 4"};ArrayAdapter<String> adapter=new ArrayAdapter<>(this,android.R.layout.simple_spinner_dropdown_item,cards);cardSelector.setAdapter(adapter);root.addView(cardSelector);
-    cardSelector.setOnItemSelectedListener(new android.widget.AdapterView.OnItemSelectedListener(){
-      public void onItemSelected(android.widget.AdapterView<?> parent,View view,int position,long id){selectedExtra=position+1;}
-      public void onNothingSelected(android.widget.AdapterView<?> parent){}
-    });
+    Spinner cardSelector=new Spinner(this);String[] cards={"Card 1","Card 2","Card 3","Card 4"};ArrayAdapter<String> adapter=new ArrayAdapter<>(this,android.R.layout.simple_spinner_dropdown_item,cards);cardSelector.setAdapter(adapter);root.addView(cardSelector);
     addButton(root,"✂  Crop selected card FRONT",()->openCrop(sourceDocument,CROP_SECOND_FRONT));
     addButton(root,"✂  Crop selected card BACK",()->openCrop(sourceDocument,CROP_SECOND_BACK));
     TextView countLabel=section("Copies per selected card: 4");root.addView(countLabel);
@@ -124,6 +121,8 @@ public class MainActivity extends Activity {
       public void onItemSelected(android.widget.AdapterView<?> parent,View view,int position,long id){selectedExtra=position+1;cardCount.setProgress(cardCopies[selectedExtra]-1);countLabel.setText("Copies for card "+(selectedExtra+1)+": "+cardCopies[selectedExtra]);}
       public void onNothingSelected(android.widget.AdapterView<?> parent){}
     });
+    CheckBox mixedToggle=new CheckBox(this);mixedToggle.setText("Mix different ID cards on the same A4 sheet");mixedToggle.setTextSize(16);mixedToggle.setPadding(6,12,6,12);root.addView(mixedToggle);
+    mixedToggle.setOnCheckedChangeListener((button,checked)->{mixedA4=checked;refresh();status.setText(checked?"Mixed A4: up to 5 front/back pairs per sheet.":"Each ID card on a separate A4 sheet.");});
     addButton(root,"Print order: choose first card",()->{
       final String[] labels={"Card 1","Card 2","Card 3","Card 4"};
       new android.app.AlertDialog.Builder(this).setTitle("Which card prints first?").setSingleChoiceItems(labels,firstCardNumber-1,(dialog,which)->{firstCardNumber=which+1;refresh();status.setText("Card "+firstCardNumber+" prints first.");dialog.dismiss();}).setNegativeButton("Cancel",null).show();
@@ -131,7 +130,7 @@ public class MainActivity extends Activity {
     addButton(root,"Clear cards 2–4",()->{extraFront=new Bitmap[4];extraBack=new Bitmap[4];secondFront=null;secondBack=null;refresh();status.setText("Additional cards cleared.");});
     root.addView(section("3  Print or save"));
     addButton(root,"🖨  Print A4",()->{if(!ready())return;printSheet();});
-    addButton(root,"Save as JPG",()->{if(ready()){if(hasSecondCard())status.setText("JPG saves page 1 only. Save PDF for both ID cards.");JpgExport.choose(this,SAVE_JPG,"JB-ID-Cards-A4.jpg");}});
+    addButton(root,"Save as JPG",()->{if(ready()){if(pageCount()>1)status.setText("JPG saves page 1 only. Save PDF for all A4 sheets.");JpgExport.choose(this,SAVE_JPG,"JB-ID-Cards-A4.jpg");}});
     addButton(root,"Save PDF",()->{if(!ready())return;Intent i=new Intent(Intent.ACTION_CREATE_DOCUMENT);i.setType("application/pdf");i.addCategory(Intent.CATEGORY_OPENABLE);i.putExtra(Intent.EXTRA_TITLE,"JB-ID-Cards-A4.pdf");startActivityForResult(i,SAVE);});
     status=new TextView(this);status.setText("Capture both sides, then print or save.");status.setTextSize(14);status.setTextColor(Color.rgb(85,103,125));status.setPadding(6,12,6,12);root.addView(status);
   }
@@ -227,31 +226,43 @@ public class MainActivity extends Activity {
   boolean hasSecondCard(){return activeCards().length>1;}
   PdfDocument makePdf(){
     PdfDocument pdf=new PdfDocument();int[] cards=activeCards();
-    for(int n=0;n<Math.max(1,cards.length);n++){
+    for(int n=0;n<pageCount();n++){
       PdfDocument.Page page=pdf.startPage(new PdfDocument.PageInfo.Builder(595,842,n+1).create());
       Canvas canvas=page.getCanvas();canvas.drawColor(Color.WHITE);drawSheetPage(canvas,n);pdf.finishPage(page);
     }
     return pdf;
   }
+  int pageCount(){int[] ids=activeCards();if(!mixedA4)return Math.max(1,ids.length);int total=0;for(int id:ids)total+=cardCopies[id];return Math.max(1,(total+4)/5);}
   void drawSheet(Canvas c){drawSheetPage(c,0);}
   void drawSheetPage(Canvas c,int pageIndex){
     int[] cards=activeCards();if(cards.length==0)return;
-    int id=cards[Math.min(pageIndex,cards.length-1)];
     final float pageW=595f,pageH=842f;
     final float cardW=85.6f*72f/25.4f,cardH=54f*72f/25.4f;
     final float middleGap=32f;
-    int rows=cards.length>1?cardCopies[id]:copyCount;
+    java.util.ArrayList<Integer> layout=new java.util.ArrayList<>();
+    if(mixedA4){
+      for(int id:cards)for(int n=0;n<cardCopies[id];n++)layout.add(id);
+      int from=pageIndex*5,to=Math.min(layout.size(),from+5);
+      if(from>=to)return;
+      layout=new java.util.ArrayList<>(layout.subList(from,to));
+    }else{
+      int id=cards[Math.min(pageIndex,cards.length-1)];
+      int rows=cards.length>1?cardCopies[id]:copyCount;
+      for(int n=0;n<rows;n++)layout.add(id);
+    }
+    int rows=layout.size();
     final float rowGap=rows==5?14f:(rows==4?48f:(rows==2?65f:0f));
     final float totalW=2f*cardW+middleGap;
     final float totalH=rows*cardH+Math.max(0,rows-1)*rowGap;
     final float x1=(pageW-totalW)/2f,x2=x1+cardW+middleGap;
     final float freeSpace=Math.max(0,pageH-totalH);
     final float top=verticalPosition==0?Math.min(18f,freeSpace):(verticalPosition==2?Math.max(0,freeSpace-18f):freeSpace/2f);
-    Bitmap f=id==0?front:extraFront[id],b=id==0?back:extraBack[id];
     for(int row=0;row<rows;row++){
+      int id=layout.get(row);
+      Bitmap f=id==0?front:extraFront[id],backImage=id==0?back:extraBack[id];
       float y=top+row*(cardH+rowGap);
       if(f!=null)drawCard(c,f,x1,y,cardW,cardH);
-      if(b!=null)drawCard(c,b,x2,y,cardW,cardH);
+      if(backImage!=null)drawCard(c,backImage,x2,y,cardW,cardH);
     }
   }
   void drawCard(Canvas c,Bitmap bmp,float x,float y,float w,float h){
@@ -269,7 +280,7 @@ public class MainActivity extends Activity {
     PrintManager manager=(PrintManager)getSystemService(PRINT_SERVICE);
     manager.print("JB ID Card A4",new PrintDocumentAdapter(){
       @Override public void onLayout(PrintAttributes oldA,PrintAttributes newA,android.os.CancellationSignal signal,LayoutResultCallback callback,Bundle extras){
-        PrintDocumentInfo info=new PrintDocumentInfo.Builder("JB-ID-Cards-A4.pdf").setContentType(PrintDocumentInfo.CONTENT_TYPE_DOCUMENT).setPageCount(Math.max(1,activeCards().length)).build();
+        PrintDocumentInfo info=new PrintDocumentInfo.Builder("JB-ID-Cards-A4.pdf").setContentType(PrintDocumentInfo.CONTENT_TYPE_DOCUMENT).setPageCount(pageCount()).build();
         callback.onLayoutFinished(info,true);
       }
       @Override public void onWrite(PageRange[] pages,ParcelFileDescriptor destination,android.os.CancellationSignal signal,WriteResultCallback callback){
