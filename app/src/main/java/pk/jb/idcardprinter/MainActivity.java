@@ -11,6 +11,7 @@ import android.print.*;
 import android.print.pdf.PrintedPdfDocument;
 import android.view.*;
 import android.widget.*;
+import android.graphics.drawable.GradientDrawable;
 import java.io.*;
 
 public class MainActivity extends Activity {
@@ -26,13 +27,17 @@ public class MainActivity extends Activity {
   int copyCount=5;
   int verticalPosition=1; // 0 top, 1 center, 2 bottom
   static final int PICK_FRONT=101, PICK_BACK=102, SAVE=103, CROP_FRONT=104, CROP_BACK=105, CAMERA_FRONT=106, CAMERA_BACK=107;
+  int navy=Color.rgb(23,43,72),accent=Color.rgb(25,105,205);
+  GradientDrawable rounded(int color,int radius){GradientDrawable d=new GradientDrawable();d.setColor(color);d.setCornerRadius(radius);return d;}
+  TextView section(String title){TextView t=new TextView(this);t.setText(title);t.setTextColor(navy);t.setTextSize(18);t.setTypeface(null,Typeface.BOLD);t.setPadding(4,18,4,8);return t;}
+  void styleAction(Button b,boolean primary){b.setAllCaps(false);b.setTextSize(16);b.setTypeface(null,Typeface.BOLD);b.setTextColor(primary?Color.WHITE:navy);b.setBackground(rounded(primary?accent:Color.rgb(226,236,249),22));b.setElevation(3);b.setPadding(14,13,14,13);}
   @Override public void onCreate(Bundle b) {
     super.onCreate(b);
     try{cvReady=org.opencv.android.OpenCVLoader.initLocal();}catch(Throwable e){cvReady=false;}
-    LinearLayout root=new LinearLayout(this); root.setOrientation(1); root.setPadding(28,30,28,36);root.setBackgroundColor(Color.rgb(244,247,252));
+    LinearLayout root=new LinearLayout(this); root.setOrientation(1); root.setPadding(20,22,20,34);root.setBackgroundColor(Color.rgb(244,247,252));
     ScrollView scroll=new ScrollView(this); scroll.addView(root); setContentView(scroll);
     TextView title=new TextView(this); title.setText("JB Mobile & PhotoState\nID Card A4 Printer"); title.setTextSize(24); title.setGravity(17); root.addView(title);
-    TextView previewTitle=new TextView(this);previewTitle.setText("LIVE A4 PRINT PREVIEW");previewTitle.setTextSize(17);previewTitle.setTextColor(Color.rgb(21,38,65));root.addView(previewTitle);
+    TextView previewTitle=new TextView(this);previewTitle.setText("Your A4 preview");previewTitle.setTextSize(16);previewTitle.setTextColor(Color.rgb(21,38,65));root.addView(previewTitle);
     sheetPreview=new View(this){
       Paint paper=new Paint(3);
       @Override protected void onDraw(Canvas c){
@@ -42,55 +47,61 @@ public class MainActivity extends Activity {
         paper.setColor(Color.WHITE);c.drawRect(0,0,595,842,paper);drawSheet(c);c.restore();
       }
     };
-    LinearLayout.LayoutParams sheetParams=new LinearLayout.LayoutParams(-1,460);sheetParams.bottomMargin=18;root.addView(sheetPreview,sheetParams);
+    LinearLayout.LayoutParams sheetParams=new LinearLayout.LayoutParams(-1,320);sheetParams.bottomMargin=18;root.addView(sheetPreview,sheetParams);
     frontView=new ImageView(this); backView=new ImageView(this);
     frontView.setAdjustViewBounds(true); backView.setAdjustViewBounds(true);
-    frontView.setMinimumHeight(130); backView.setMinimumHeight(130);
-    addButton(root,"1. Capture FRONT with camera",()->openCamera(CAMERA_FRONT));
-    addButton(root,"Choose FRONT from gallery",()->pick(PICK_FRONT)); root.addView(frontView);
-    addButton(root,"2. Capture BACK with camera",()->openCamera(CAMERA_BACK));
-    addButton(root,"Choose BACK from gallery",()->pick(PICK_BACK)); root.addView(backView);
-    addButton(root,"Rotate FRONT 90°",()->rotateCard(true));
-    addButton(root,"Rotate BACK 90°",()->rotateCard(false));
-    addButton(root,"Manual crop FRONT (4 corners)",()->openCrop(frontUri,CROP_FRONT));
-    addButton(root,"Manual crop BACK (4 corners)",()->openCrop(backUri,CROP_BACK));
-    addButton(root,"Auto crop both photos",()->{if(!ready())return;Bitmap f=autoCrop(originalFront!=null?originalFront:front);Bitmap croppedBack=autoCrop(originalBack!=null?originalBack:back);boolean fc=f!=(originalFront!=null?originalFront:front),bc=croppedBack!=(originalBack!=null?originalBack:back);front=f;back=croppedBack;refresh();status.setText("Front: "+(fc?"cropped":"NOT detected")+" | Back: "+(bc?"cropped":"NOT detected")+". Use Manual Crop if not detected.");});
-    TextView printLabel=new TextView(this);printLabel.setText("Print quality / color mode");printLabel.setTextSize(17);root.addView(printLabel);
+    frontView.setMinimumHeight(90); backView.setMinimumHeight(90);frontView.setMaxHeight(170);backView.setMaxHeight(170);
+    root.addView(section("1  Front of ID card"));
+    addButton(root,"📷  Capture front",()->openCamera(CAMERA_FRONT));
+    addButton(root,"Choose existing front photo",()->pick(PICK_FRONT)); root.addView(frontView);
+    root.addView(section("2  Back of ID card"));
+    addButton(root,"📷  Capture back",()->openCamera(CAMERA_BACK));
+    addButton(root,"Choose existing back photo",()->pick(PICK_BACK)); root.addView(backView);
+    Button advancedToggle=new Button(this);advancedToggle.setText("⚙  More options");styleAction(advancedToggle,false);root.addView(advancedToggle);
+    LinearLayout advanced=new LinearLayout(this);advanced.setOrientation(1);advanced.setPadding(12,12,12,12);advanced.setBackground(rounded(Color.WHITE,22));advanced.setVisibility(View.GONE);root.addView(advanced);
+    advancedToggle.setOnClickListener(v->{boolean show=advanced.getVisibility()!=View.VISIBLE;advanced.setVisibility(show?View.VISIBLE:View.GONE);advancedToggle.setText(show?"Hide extra options":"⚙  More options");});
+    addButton(advanced,"Rotate FRONT 90°",()->rotateCard(true));
+    addButton(advanced,"Rotate BACK 90°",()->rotateCard(false));
+    addButton(advanced,"Manual crop FRONT (4 corners)",()->openCrop(frontUri,CROP_FRONT));
+    addButton(advanced,"Manual crop BACK (4 corners)",()->openCrop(backUri,CROP_BACK));
+    addButton(advanced,"Auto crop both photos",()->{if(!ready())return;Bitmap f=autoCrop(originalFront!=null?originalFront:front);Bitmap croppedBack=autoCrop(originalBack!=null?originalBack:back);boolean fc=f!=(originalFront!=null?originalFront:front),bc=croppedBack!=(originalBack!=null?originalBack:back);front=f;back=croppedBack;refresh();status.setText("Front: "+(fc?"cropped":"NOT detected")+" | Back: "+(bc?"cropped":"NOT detected")+". Use Manual Crop if not detected.");});
+    TextView printLabel=new TextView(this);printLabel.setText("Print quality / color mode");printLabel.setTextSize(17);advanced.addView(printLabel);
     RadioGroup modes=new RadioGroup(this);modes.setOrientation(RadioGroup.VERTICAL);
     String[] names={"Original Color","B&W Enhanced (recommended)","B&W High Contrast","Dark Text / Print Enhance"};
     for(int k=0;k<names.length;k++){final int mode=k;RadioButton rb=new RadioButton(this);rb.setText(names[k]);rb.setId(400+k);modes.addView(rb);}
     modes.check(400);modes.setOnCheckedChangeListener((group,id)->{printMode=id-400;refresh();status.setText("Preview and PDF will use selected print mode. Review fine text before printing.");});
-    root.addView(modes);
-    TextView darknessLabel=new TextView(this);darknessLabel.setText("Text darkness: "+darkness+" (0-30)");root.addView(darknessLabel);
+    advanced.addView(modes);
+    TextView darknessLabel=new TextView(this);darknessLabel.setText("Text darkness: "+darkness+" (0-30)");advanced.addView(darknessLabel);
     SeekBar darknessSlider=new SeekBar(this);darknessSlider.setMax(30);darknessSlider.setProgress(darkness);
     darknessSlider.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener(){
       public void onProgressChanged(SeekBar bar,int value,boolean fromUser){darkness=value;darknessLabel.setText("Text darkness: "+value+" (0-30)");if(fromUser&&printMode!=0)refresh();}
       public void onStartTrackingTouch(SeekBar bar){}
       public void onStopTrackingTouch(SeekBar bar){}
     });
-    root.addView(darknessSlider);
-    TextView brightLabel=new TextView(this);brightLabel.setText("Photo brightness: +"+brightness+" (-40 to +60)");root.addView(brightLabel);
+    advanced.addView(darknessSlider);
+    TextView brightLabel=new TextView(this);brightLabel.setText("Photo brightness: +"+brightness+" (-40 to +60)");advanced.addView(brightLabel);
     SeekBar brightSlider=new SeekBar(this);brightSlider.setMax(100);brightSlider.setProgress(brightness+40);
     brightSlider.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener(){
       public void onProgressChanged(SeekBar b,int value,boolean user){brightness=value-40;brightLabel.setText("Photo brightness: "+(brightness>=0?"+":"")+brightness+" (-40 to +60)");if(user)refresh();}
       public void onStartTrackingTouch(SeekBar b){}
       public void onStopTrackingTouch(SeekBar b){}
-    });root.addView(brightSlider);
-    TextView copiesLabel=new TextView(this);copiesLabel.setText("ID card copies per A4 sheet (front + back)");copiesLabel.setTextSize(17);root.addView(copiesLabel);
+    });advanced.addView(brightSlider);
+    TextView copiesLabel=new TextView(this);copiesLabel.setText("ID card copies per A4 sheet (front + back)");copiesLabel.setTextSize(17);advanced.addView(copiesLabel);
     RadioGroup copies=new RadioGroup(this);copies.setOrientation(RadioGroup.HORIZONTAL);
     int[] copyOptions={1,2,4,5};
     for(int count:copyOptions){RadioButton rb=new RadioButton(this);rb.setId(600+count);rb.setText(""+count);copies.addView(rb);}
-    copies.check(605);copies.setOnCheckedChangeListener((g,id)->{copyCount=id-600;updateSheet();});root.addView(copies);
-    TextView positionLabel=new TextView(this);positionLabel.setText("A4 card placement");positionLabel.setTextSize(17);root.addView(positionLabel);
+    copies.check(605);copies.setOnCheckedChangeListener((g,id)->{copyCount=id-600;updateSheet();});advanced.addView(copies);
+    TextView positionLabel=new TextView(this);positionLabel.setText("A4 card placement");positionLabel.setTextSize(17);advanced.addView(positionLabel);
     RadioGroup positions=new RadioGroup(this);positions.setOrientation(RadioGroup.HORIZONTAL);
     String[] positionNames={"Top","Center","Bottom"};
     for(int i=0;i<3;i++){RadioButton rb=new RadioButton(this);rb.setId(720+i);rb.setText(positionNames[i]);positions.addView(rb);}
-    positions.check(721);positions.setOnCheckedChangeListener((g,id)->{verticalPosition=id-720;updateSheet();});root.addView(positions);
-    addButton(root,"Print A4 directly",()->{if(!ready())return;printSheet();});
-    addButton(root,"Save A4 as PDF",()->{if(!ready())return;Intent i=new Intent(Intent.ACTION_CREATE_DOCUMENT);i.setType("application/pdf");i.addCategory(Intent.CATEGORY_OPENABLE);i.putExtra(Intent.EXTRA_TITLE,"JB-ID-Cards-A4.pdf");startActivityForResult(i,SAVE);});
-    status=new TextView(this);status.setText("Select both photos. Print at actual size (100%).");status.setTextSize(15);root.addView(status);
+    positions.check(721);positions.setOnCheckedChangeListener((g,id)->{verticalPosition=id-720;updateSheet();});advanced.addView(positions);
+    root.addView(section("3  Print or save"));
+    addButton(root,"🖨  Print A4",()->{if(!ready())return;printSheet();});
+    addButton(root,"Save PDF",()->{if(!ready())return;Intent i=new Intent(Intent.ACTION_CREATE_DOCUMENT);i.setType("application/pdf");i.addCategory(Intent.CATEGORY_OPENABLE);i.putExtra(Intent.EXTRA_TITLE,"JB-ID-Cards-A4.pdf");startActivityForResult(i,SAVE);});
+    status=new TextView(this);status.setText("Capture both sides, then print or save.");status.setTextSize(14);status.setTextColor(Color.rgb(85,103,125));status.setPadding(6,12,6,12);root.addView(status);
   }
-  void addButton(LinearLayout root,String name,Runnable action){Button b=new Button(this);b.setText(name);root.addView(b);b.setOnClickListener(v->action.run());}
+  void addButton(LinearLayout root,String name,Runnable action){Button b=new Button(this);b.setText(name);styleAction(b,name.contains("Capture")||name.contains("Print A4"));LinearLayout.LayoutParams lp=new LinearLayout.LayoutParams(-1,-2);lp.bottomMargin=10;root.addView(b,lp);b.setOnClickListener(v->action.run());}
   void openCrop(Uri uri,int code){if(uri==null){status.setText("Select the photo first.");return;}Intent i=new Intent(this,CropActivity.class);i.setData(uri);startActivityForResult(i,code);}
   void openCamera(int code){Intent i=new Intent(this,CardCameraActivity.class);startActivityForResult(i,code);}
   void pick(int code){Intent i=new Intent(Intent.ACTION_GET_CONTENT);i.setType("image/*");startActivityForResult(i,code);}
