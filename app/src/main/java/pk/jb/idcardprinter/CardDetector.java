@@ -61,43 +61,50 @@ public final class CardDetector {
       Point[] best=null;
       double bestScore=-Double.MAX_VALUE;
       double frame=small.width()*small.height();
-      // Try several edge sensitivities: textured backgrounds and pale card edges vary.
-      int[][] thresholds={{18,55},{30,85},{35,100},{55,150},{80,190}};
+      // Multi-pass thresholding and rectangular hull fallback help pale cards on hands.
+      int[][] thresholds={{12,40},{20,65},{35,105},{55,150},{85,200}};
       for(int[] threshold:thresholds){
         Imgproc.Canny(gray,edges,threshold[0],threshold[1]);
-        Mat kernel=Imgproc.getStructuringElement(Imgproc.MORPH_RECT,new Size(3,3));
+        Mat kernel=Imgproc.getStructuringElement(Imgproc.MORPH_RECT,new Size(5,5));
         Imgproc.morphologyEx(edges,edges,Imgproc.MORPH_CLOSE,kernel);
         kernel.release();
         List<MatOfPoint> contours=new ArrayList<>();
         Imgproc.findContours(edges,contours,hierarchy,Imgproc.RETR_LIST,Imgproc.CHAIN_APPROX_SIMPLE);
         for(MatOfPoint contour:contours){
           double area=Math.abs(Imgproc.contourArea(contour));
-          if(area<frame*.008||area>frame*.85)continue;
+          if(area<frame*.018||area>frame*.75){contour.release();continue;}
           MatOfPoint2f curve=new MatOfPoint2f(contour.toArray()),approx=new MatOfPoint2f();
           double perimeter=Imgproc.arcLength(curve,true);
-          Imgproc.approxPolyDP(curve,approx,.018*perimeter,true);
-          Point[] p=approx.toArray();
-          if(p.length==4){
-            MatOfPoint polygon=new MatOfPoint(p);
-            boolean convex=Imgproc.isContourConvex(polygon);
-            polygon.release();
+          Imgproc.approxPolyDP(curve,approx,.025*perimeter,true);
+          Point[] candidate=approx.toArray();
+          boolean exact=candidate.length==4;
+          if(!exact){
+            // A hand or low-contrast border can break a card edge. Fit a rotated
+            // rectangle only when the contour itself fills that rectangle closely.
+            RotatedRect rect=Imgproc.minAreaRect(curve);
+            Point[] corners=new Point[4];rect.points(corners);
+            double rectArea=Math.max(1,rect.size.width*rect.size.height);
+            if(area/rectArea>=.79)candidate=corners;
+          }
+          if(candidate.length==4){
+            MatOfPoint polygon=new MatOfPoint(candidate);
+            boolean convex=Imgproc.isContourConvex(polygon);polygon.release();
             if(convex){
-              Point[] ordered=order(p);
+              Point[] ordered=order(candidate);
               double width=(dist(ordered[0],ordered[1])+dist(ordered[3],ordered[2]))/2;
               double height=(dist(ordered[0],ordered[3])+dist(ordered[1],ordered[2]))/2;
-              double ratio=width/Math.max(1,height);
-              double cx=(ordered[0].x+ordered[1].x+ordered[2].x+ordered[3].x)/4;
-              double cy=(ordered[0].y+ordered[1].y+ordered[2].y+ordered[3].y)/4;
-              if(((ratio>=1.20&&ratio<=2.05)||(ratio>=.48&&ratio<=.84)) && cx>small.width()*.08&&cx<small.width()*.92 && cy>small.height()*.08&&cy<small.height()*.92){
-                double normalizedRatio=ratio>=1?ratio:1.0/ratio;
-                double score=Math.sqrt(area/frame)-.70*Math.abs(normalizedRatio-85.6/54.0);
+              double ratio=Math.max(width,height)/Math.max(1,Math.min(width,height));
+              double cx=0,cy=0;for(Point p:ordered){cx+=p.x;cy+=p.y;}cx/=4;cy/=4;
+              MatOfPoint quad=new MatOfPoint(ordered);double quadArea=Math.abs(Imgproc.contourArea(quad));quad.release();
+              double fill=area/Math.max(1,quadArea);
+              if(ratio>=1.30&&ratio<=1.90&&fill>=.68&&cx>small.width()*.08&&cx<small.width()*.92&&cy>small.height()*.08&&cy<small.height()*.92){
+                double score=Math.sqrt(quadArea/frame)*2.0-1.15*Math.abs(ratio-85.6/54.0)+(exact?.12:0);
                 if(score>bestScore){bestScore=score;best=ordered;}
               }
             }
           }
-          curve.release();approx.release();
+          curve.release();approx.release();contour.release();
         }
-        for(MatOfPoint contour:contours)contour.release();
       }
       if(best==null)return null;
       Point[] original=new Point[4];
