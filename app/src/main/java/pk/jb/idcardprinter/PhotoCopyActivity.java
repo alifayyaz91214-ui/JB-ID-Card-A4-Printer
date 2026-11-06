@@ -128,22 +128,45 @@ public class PhotoCopyActivity extends Activity {
     Uri selected=request==CAMERA?cameraUri:(data==null?null:data.getData());
     if(selected==null)return;
     if(request==SAVE){try(OutputStream out=getContentResolver().openOutputStream(data.getData())){PdfDocument d=makePdf();d.writeTo(out);d.close();status.setText("A4 PDF saved.");}catch(Exception e){status.setText("Save error: "+e.getMessage());}return;}
-    if(request==PICK||request==CAMERA){try{
-      BitmapFactory.Options o=new BitmapFactory.Options();o.inJustDecodeBounds=true;
-      try(InputStream in=getContentResolver().openInputStream(selected)){BitmapFactory.decodeStream(in,null,o);}
-      o.inSampleSize=1;while(Math.max(o.outWidth/o.inSampleSize,o.outHeight/o.inSampleSize)>2600)o.inSampleSize*=2;o.inJustDecodeBounds=false;
-      try(InputStream in=getContentResolver().openInputStream(selected)){photo=BitmapFactory.decodeStream(in,null,o);}
-      if(photo==null)throw new IOException("Cannot read photo");
-      // Respect camera/gallery EXIF orientation before composing the A4 sheet.
-      try(InputStream exifStream=getContentResolver().openInputStream(selected)){
-        android.media.ExifInterface exif=new android.media.ExifInterface(exifStream);
-        int orientation=exif.getAttributeInt(android.media.ExifInterface.TAG_ORIENTATION,1);
-        int degrees=orientation==6?90:(orientation==3?180:(orientation==8?270:0));
-        if(degrees!=0){Matrix m=new Matrix();m.postRotate(degrees);photo=Bitmap.createBitmap(photo,0,0,photo.getWidth(),photo.getHeight(),m,true);}
-      }catch(Exception ignored){}
-      status.setText("High-resolution image loaded. Adjust scan darkness and check live A4 preview.");refresh();
-    }catch(Exception e){status.setText("Photo error: "+e.getMessage());}}
+    if(request==PICK||request==CAMERA){
+      status.setText("Loading document safely...");
+      final Uri imageUri=selected;
+      new Thread(()->{
+        Bitmap decoded=null;
+        String error=null;
+        try{
+          BitmapFactory.Options o=new BitmapFactory.Options();
+          o.inJustDecodeBounds=true;
+          try(InputStream in=getContentResolver().openInputStream(imageUri)){BitmapFactory.decodeStream(in,null,o);}
+          if(o.outWidth<=0||o.outHeight<=0)throw new IOException("Invalid image dimensions");
+          o.inSampleSize=1;
+          while(Math.max(o.outWidth/o.inSampleSize,o.outHeight/o.inSampleSize)>2200)o.inSampleSize*=2;
+          o.inJustDecodeBounds=false;o.inPreferredConfig=Bitmap.Config.RGB_565;
+          try(InputStream in=getContentResolver().openInputStream(imageUri)){decoded=BitmapFactory.decodeStream(in,null,o);}
+          if(decoded==null)throw new IOException("Cannot decode image");
+          try(InputStream exifStream=getContentResolver().openInputStream(imageUri)){
+            android.media.ExifInterface exif=new android.media.ExifInterface(exifStream);
+            int orientation=exif.getAttributeInt(android.media.ExifInterface.TAG_ORIENTATION,1);
+            int degrees=orientation==6?90:(orientation==3?180:(orientation==8?270:0));
+            if(degrees!=0){Matrix matrix=new Matrix();matrix.postRotate(degrees);
+              Bitmap rotated=Bitmap.createBitmap(decoded,0,0,decoded.getWidth(),decoded.getHeight(),matrix,true);
+              if(rotated!=decoded)decoded.recycle();decoded=rotated;
+            }
+          }catch(Exception ignored){}
+        }catch(Exception e){error=e.getMessage();}
+        final Bitmap resultBitmap=decoded;final String resultError=error;
+        runOnUiThread(()->{
+          if(isFinishing()||isDestroyed()){if(resultBitmap!=null)resultBitmap.recycle();return;}
+          if(resultError!=null){if(resultBitmap!=null)resultBitmap.recycle();status.setText("Photo error: "+resultError);return;}
+          Bitmap old=photo;photo=resultBitmap;
+          if(old!=null&&old!=resultBitmap)old.recycle();
+          status.setText("Document loaded. Adjust scan settings and check A4 preview.");
+          refresh();
+        });
+      }).start();
+    }
   }
+
   void printSheet(){
     PrintManager m=(PrintManager)getSystemService(PRINT_SERVICE);
     m.print("JB A4 Photo Copies",new PrintDocumentAdapter(){
