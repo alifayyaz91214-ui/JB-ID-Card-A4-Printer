@@ -26,6 +26,8 @@ public class MainActivity extends Activity {
   Uri frontUri, backUri;
   ImageView frontView, backView;
   LinearLayout cardList;
+  ImageView importedPreview;
+  int shownCards=1;
   int importPage=0;
   TextView status;
   View sheetPreview;
@@ -49,6 +51,7 @@ public class MainActivity extends Activity {
     root.addView(section("1  Add ID cards"));
     addButton(root,"+  Add photo or document",()->showImportChoices());
     TextView instruction=new TextView(this);instruction.setText("Choose Camera or Gallery. Then crop each card front and back.");instruction.setTextColor(navy);instruction.setPadding(8,4,8,12);root.addView(instruction);
+    importedPreview=new ImageView(this);importedPreview.setAdjustViewBounds(true);importedPreview.setMaxHeight(240);root.addView(importedPreview);
     cardList=new LinearLayout(this);cardList.setOrientation(1);root.addView(cardList);
     frontView=new ImageView(this);backView=new ImageView(this);
     frontView.setAdjustViewBounds(true);backView.setAdjustViewBounds(true);
@@ -131,10 +134,10 @@ public class MainActivity extends Activity {
           cropped=autoCrop(bmp);
         }catch(Exception e){error=e.getMessage();}
         final Bitmap source=bmp,resultBitmap=cropped;final String failure=error;
-        runOnUiThread(()->{if(isFinishing()||isDestroyed())return;if(failure!=null){status.setText("Camera image error: "+failure);return;}if(isFront){originalFront=source;front=resultBitmap;frontUri=Uri.fromFile(new File(path));}else{originalBack=source;back=resultBitmap;backUri=Uri.fromFile(new File(path));}refresh();if(resultBitmap==source){status.setText("Card edges not detected. Opening 4-corner crop so hands and background are removed.");openCrop(Uri.fromFile(new File(path)),isFront?CROP_FRONT:CROP_BACK);}else{status.setText("Card captured and perspective-straightened. Check edges in preview.");}});
+        runOnUiThread(()->{if(isFinishing()||isDestroyed())return;if(failure!=null){status.setText("Camera image error: "+failure);return;}if(isFront){originalFront=source;front=resultBitmap;frontUri=Uri.fromFile(new File(path));sourceDocument=frontUri;}else{originalBack=source;back=resultBitmap;backUri=Uri.fromFile(new File(path));sourceDocument=backUri;}refresh();if(resultBitmap==source){status.setText("Card edges not detected. Opening 4-corner crop so hands and background are removed.");openCrop(Uri.fromFile(new File(path)),isFront?CROP_FRONT:CROP_BACK);}else{status.setText("Card captured and perspective-straightened. Check edges in preview.");}});
       }).start();return;
     }
-    if(request==PICK_DOCUMENT){sourceDocument=data.getData();try{String mime=getContentResolver().getType(sourceDocument);if("application/pdf".equals(mime)){android.graphics.pdf.PdfRenderer renderer=new android.graphics.pdf.PdfRenderer(getContentResolver().openFileDescriptor(sourceDocument,"r"));android.graphics.pdf.PdfRenderer.Page page=renderer.openPage(0);float scale=Math.min(2.5f,2200f/Math.max(page.getWidth(),page.getHeight()));Bitmap image=Bitmap.createBitmap(Math.max(1,(int)(page.getWidth()*scale)),Math.max(1,(int)(page.getHeight()*scale)),Bitmap.Config.ARGB_8888);image.eraseColor(Color.WHITE);page.render(image,null,null,android.graphics.pdf.PdfRenderer.Page.RENDER_MODE_FOR_DISPLAY);page.close();renderer.close();File file=new File(getCacheDir(),"jb-imported-document.png");try(FileOutputStream out=new FileOutputStream(file)){image.compress(Bitmap.CompressFormat.PNG,100,out);}sourceDocument=Uri.fromFile(file);status.setText("PDF page 1 loaded. Select each ID card using the crop buttons.");}else{status.setText("Image loaded. Select each ID card using the crop buttons.");}}catch(Exception e){status.setText("Document import failed: "+e.getMessage());}return;}
+    if(request==PICK_DOCUMENT){sourceDocument=data.getData();try{String mime=getContentResolver().getType(sourceDocument);if("application/pdf".equals(mime)){android.graphics.pdf.PdfRenderer renderer=new android.graphics.pdf.PdfRenderer(getContentResolver().openFileDescriptor(sourceDocument,"r"));android.graphics.pdf.PdfRenderer.Page page=renderer.openPage(0);float scale=Math.min(2.5f,2200f/Math.max(page.getWidth(),page.getHeight()));Bitmap image=Bitmap.createBitmap(Math.max(1,(int)(page.getWidth()*scale)),Math.max(1,(int)(page.getHeight()*scale)),Bitmap.Config.ARGB_8888);image.eraseColor(Color.WHITE);page.render(image,null,null,android.graphics.pdf.PdfRenderer.Page.RENDER_MODE_FOR_DISPLAY);page.close();renderer.close();File file=new File(getCacheDir(),"jb-imported-document.png");try(FileOutputStream out=new FileOutputStream(file)){image.compress(Bitmap.CompressFormat.PNG,100,out);}sourceDocument=Uri.fromFile(file);status.setText("PDF page 1 loaded. Choose card count and crop each side.");}else{status.setText("Image loaded. Choose card count and crop each side.");}}catch(Exception e){status.setText("Document import failed: "+e.getMessage());return;}try{BitmapFactory.Options options=new BitmapFactory.Options();options.inSampleSize=4;Bitmap thumb=BitmapFactory.decodeStream(getContentResolver().openInputStream(sourceDocument),null,options);importedPreview.setImageBitmap(thumb);}catch(Exception ignored){}chooseCardCount();return;}
     if(request==CROP_FRONT||request==CROP_BACK||request==CROP_SECOND_FRONT||request==CROP_SECOND_BACK){try{String path=data.getStringExtra("cropPath");Bitmap bmp=BitmapFactory.decodeFile(path);if(bmp==null)throw new IOException("Cropped image unavailable");if(request==CROP_FRONT)front=bmp;else if(request==CROP_BACK)back=bmp;else if(request==CROP_SECOND_FRONT){extraFront[selectedExtra]=bmp;if(selectedExtra==1)secondFront=bmp;}else{extraBack[selectedExtra]=bmp;if(selectedExtra==1)secondBack=bmp;}refresh();status.setText("Selected card crop saved.");}catch(Exception e){status.setText("Crop error: "+e.getMessage());}return;}
     if(request==SAVE_JPG){try{JpgExport.save(this,data.getData(),2480,3508,c->{c.scale(2480f/595f,3508f/842f);drawSheet(c);});status.setText("A4 JPG saved at 300 DPI.");}catch(Exception e){status.setText("JPG save failed: "+e.getMessage());}return;}
     if(request==SAVE){try(OutputStream out=getContentResolver().openOutputStream(data.getData())){PdfDocument pdf=makePdf();pdf.writeTo(out);pdf.close();status.setText("PDF saved successfully.");}catch(Exception e){status.setText("PDF error: "+e.getMessage());}return;}
@@ -168,7 +171,7 @@ public class MainActivity extends Activity {
     for(int id=0;id<4;id++){
       final int index=id;
       Bitmap f=id==0?front:extraFront[id],b=id==0?back:extraBack[id];
-      if(id>0&&f==null&&b==null&&id>firstEmptyCard())continue;
+      if(id>=shownCards&&f==null&&b==null)continue;
       LinearLayout panel=new LinearLayout(this);panel.setOrientation(1);panel.setPadding(12,10,12,14);panel.setBackground(rounded(Color.WHITE,18));
       LinearLayout.LayoutParams margin=new LinearLayout.LayoutParams(-1,-2);margin.bottomMargin=12;cardList.addView(panel,margin);
       TextView heading=section("Card "+(id+1)+"  •  "+(f!=null&&b!=null?"Ready":f!=null||b!=null?"Needs other side":"Add card"));panel.addView(heading);
@@ -186,6 +189,10 @@ public class MainActivity extends Activity {
         });
       }
     }
+  }
+  void chooseCardCount(){
+    String[] options={"1 card","2 cards","3 cards","4 cards"};
+    new android.app.AlertDialog.Builder(this).setTitle("How many ID cards are in this photo?").setSingleChoiceItems(options,shownCards-1,(dialog,which)->{shownCards=which+1;renderCardList();dialog.dismiss();}).setPositiveButton("Done",(dialog,which)->renderCardList()).show();
   }
   int firstEmptyCard(){for(int i=1;i<4;i++)if(extraFront[i]==null&&extraBack[i]==null)return i;return 3;}
   void cropSlot(int index,boolean isFront){
