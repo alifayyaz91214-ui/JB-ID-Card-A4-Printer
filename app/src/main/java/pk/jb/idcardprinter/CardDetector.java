@@ -119,9 +119,9 @@ public final class CardDetector {
         List<MatOfPoint> extra=new ArrayList<>();Imgproc.findContours(edges,extra,hierarchy,Imgproc.RETR_LIST,Imgproc.CHAIN_APPROX_SIMPLE);
         for(MatOfPoint contour:extra){double area=Math.abs(Imgproc.contourArea(contour));if(area<frame*.018||area>frame*.75){contour.release();continue;}
           MatOfPoint2f curve=new MatOfPoint2f(contour.toArray()),approx=new MatOfPoint2f();Imgproc.approxPolyDP(curve,approx,.025*Imgproc.arcLength(curve,true),true);
-          Point[] pts=approx.toArray();if(pts.length==4){MatOfPoint poly=new MatOfPoint(pts);boolean convex=Imgproc.isContourConvex(poly);poly.release();if(convex){Point[] q=order(pts);double w=(dist(q[0],q[1])+dist(q[2],q[3]))/2,h=(dist(q[0],q[3])+dist(q[1],q[2]))/2;double ratio=Math.max(w,h)/Math.max(1,Math.min(w,h));double cx=0,cy=0;for(Point p:q){cx+=p.x;cy+=p.y;}cx/=4;cy/=4;if(ratio>=1.3&&ratio<=1.9&&cx>small.width()*.08&&cx<small.width()*.92&&cy>small.height()*.08&&cy<small.height()*.92){best=q;curve.release();approx.release();contour.release();break;}}}
+          Point[] pts=approx.toArray();if(pts.length==4){MatOfPoint poly=new MatOfPoint(pts);boolean convex=Imgproc.isContourConvex(poly);poly.release();if(convex){Point[] q=order(pts);double w=(dist(q[0],q[1])+dist(q[2],q[3]))/2,h=(dist(q[0],q[3])+dist(q[1],q[2]))/2;double ratio=Math.max(w,h)/Math.max(1,Math.min(w,h));double cx=0,cy=0;for(Point p:q){cx+=p.x;cy+=p.y;}cx/=4;cy/=4;if(ratio>=1.3&&ratio<=1.9&&cx>small.width()*.08&&cx<small.width()*.92&&cy>small.height()*.08&&cy<small.height()*.92){best=q;curve.release();approx.release();break;}}}
           curve.release();approx.release();contour.release();
-        }for(MatOfPoint c:extra)c.release();enhanced.release();
+        }for(MatOfPoint c:extra)if(!c.empty())c.release();enhanced.release();
       }
       if(best==null)return null;
       Point[] original=new Point[4];
