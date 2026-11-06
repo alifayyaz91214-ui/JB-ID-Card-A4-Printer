@@ -25,6 +25,8 @@ public class MainActivity extends Activity {
   boolean mixedA4=false;
   Uri frontUri, backUri;
   ImageView frontView, backView;
+  LinearLayout cardList;
+  int importPage=0;
   TextView status;
   View sheetPreview;
   boolean cvReady=false;
@@ -44,7 +46,12 @@ public class MainActivity extends Activity {
     LinearLayout root=new LinearLayout(this); root.setOrientation(1); root.setPadding(20,22,20,34);root.setBackgroundColor(Color.rgb(244,247,252));
     ScrollView scroll=new ScrollView(this); scroll.addView(root); setContentView(scroll);
     TextView title=new TextView(this); title.setText("JB Mobile & PhotoState\nID Card A4 Printer"); title.setTextSize(24); title.setGravity(17); root.addView(title);
-    TextView previewTitle=new TextView(this);previewTitle.setText("Your A4 preview");previewTitle.setTextSize(16);previewTitle.setTextColor(Color.rgb(21,38,65));root.addView(previewTitle);
+    root.addView(section("1  Add ID cards"));
+    addButton(root,"+  Add photo or document",()->showImportChoices());
+    TextView instruction=new TextView(this);instruction.setText("Choose Camera or Gallery. Then crop each card front and back.");instruction.setTextColor(navy);instruction.setPadding(8,4,8,12);root.addView(instruction);
+    cardList=new LinearLayout(this);cardList.setOrientation(1);root.addView(cardList);
+    frontView=new ImageView(this);backView=new ImageView(this);
+    frontView.setAdjustViewBounds(true);backView.setAdjustViewBounds(true);
     sheetPreview=new View(this){
       Paint paper=new Paint(3);
       @Override protected void onDraw(Canvas c){
@@ -54,18 +61,7 @@ public class MainActivity extends Activity {
         paper.setColor(Color.WHITE);c.drawRect(0,0,595,842,paper);drawSheet(c);c.restore();
       }
     };
-    LinearLayout.LayoutParams sheetParams=new LinearLayout.LayoutParams(-1,320);sheetParams.bottomMargin=18;root.addView(sheetPreview,sheetParams);
-    frontView=new ImageView(this); backView=new ImageView(this);
-    frontView.setAdjustViewBounds(true); backView.setAdjustViewBounds(true);
-    frontView.setMinimumHeight(90); backView.setMinimumHeight(90);frontView.setMaxHeight(170);backView.setMaxHeight(170);
-    root.addView(section("1  Front of ID card"));
-    addButton(root,"📷  Capture front",()->openCamera(CAMERA_FRONT));
-    addButton(root,"Choose existing front photo",()->pick(PICK_FRONT)); root.addView(frontView);
-    addButton(root,"✂  Front manual crop",()->openCrop(frontUri,CROP_FRONT));
-    root.addView(section("2  Back of ID card"));
-    addButton(root,"📷  Capture back",()->openCamera(CAMERA_BACK));
-    addButton(root,"Choose existing back photo",()->pick(PICK_BACK)); root.addView(backView);
-    addButton(root,"✂  Back manual crop",()->openCrop(backUri,CROP_BACK));
+    renderCardList();
     Button advancedToggle=new Button(this);advancedToggle.setText("⚙  More options");styleAction(advancedToggle,false);root.addView(advancedToggle);
     LinearLayout advanced=new LinearLayout(this);advanced.setOrientation(1);advanced.setPadding(12,12,12,12);advanced.setBackground(rounded(Color.WHITE,22));advanced.setVisibility(View.GONE);root.addView(advanced);
     advancedToggle.setOnClickListener(v->{boolean show=advanced.getVisibility()!=View.VISIBLE;advanced.setVisibility(show?View.VISIBLE:View.GONE);advancedToggle.setText(show?"Hide extra options":"⚙  More options");});
@@ -103,31 +99,15 @@ public class MainActivity extends Activity {
     String[] positionNames={"Top","Center","Bottom"};
     for(int i=0;i<3;i++){RadioButton rb=new RadioButton(this);rb.setId(720+i);rb.setText(positionNames[i]);positions.addView(rb);}
     positions.check(721);positions.setOnCheckedChangeListener((g,id)->{verticalPosition=id-720;updateSheet();});advanced.addView(positions);
-    root.addView(section("Multiple ID cards (up to 4)"));
-    addButton(root,"Open JPG / PNG / PDF document",()->{Intent i=new Intent(Intent.ACTION_OPEN_DOCUMENT);i.setType("*/*");i.addCategory(Intent.CATEGORY_OPENABLE);i.putExtra(Intent.EXTRA_MIME_TYPES,new String[]{"image/jpeg","image/png","image/webp","application/pdf"});startActivityForResult(i,PICK_DOCUMENT);});
-    addButton(root,"✂  Select card 1 FRONT",()->openCrop(sourceDocument,CROP_FRONT));
-    addButton(root,"✂  Select card 1 BACK",()->openCrop(sourceDocument,CROP_BACK));
-    Spinner cardSelector=new Spinner(this);String[] cards={"Card 1","Card 2","Card 3","Card 4"};ArrayAdapter<String> adapter=new ArrayAdapter<>(this,android.R.layout.simple_spinner_dropdown_item,cards);cardSelector.setAdapter(adapter);root.addView(cardSelector);
-    addButton(root,"✂  Crop selected card FRONT",()->openCrop(sourceDocument,CROP_SECOND_FRONT));
-    addButton(root,"✂  Crop selected card BACK",()->openCrop(sourceDocument,CROP_SECOND_BACK));
-    TextView countLabel=section("Copies per selected card: 4");root.addView(countLabel);
-    SeekBar cardCount=new SeekBar(this);cardCount.setMax(4);cardCount.setProgress(3);root.addView(cardCount);
-    cardCount.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener(){
-      public void onProgressChanged(SeekBar bar,int progress,boolean user){cardCopies[selectedExtra]=progress+1;countLabel.setText("Copies for card "+(selectedExtra+1)+": "+(progress+1));refresh();}
-      public void onStartTrackingTouch(SeekBar bar){}
-      public void onStopTrackingTouch(SeekBar bar){}
+    root.addView(section("2  A4 layout"));
+    CheckBox mixedToggle=new CheckBox(this);mixedToggle.setText("Mix selected cards on one A4 sheet");mixedToggle.setChecked(true);mixedA4=true;root.addView(mixedToggle);
+    mixedToggle.setOnCheckedChangeListener((button,checked)->{mixedA4=checked;refresh();});
+    addButton(root,"Choose first card to print",()->{
+      String[] labels={"Card 1","Card 2","Card 3","Card 4"};
+      new android.app.AlertDialog.Builder(this).setTitle("Print first").setItems(labels,(dialog,which)->{firstCardNumber=which+1;refresh();}).show();
     });
-    cardSelector.setOnItemSelectedListener(new android.widget.AdapterView.OnItemSelectedListener(){
-      public void onItemSelected(android.widget.AdapterView<?> parent,View view,int position,long id){selectedExtra=position+1;cardCount.setProgress(cardCopies[selectedExtra]-1);countLabel.setText("Copies for card "+(selectedExtra+1)+": "+cardCopies[selectedExtra]);}
-      public void onNothingSelected(android.widget.AdapterView<?> parent){}
-    });
-    CheckBox mixedToggle=new CheckBox(this);mixedToggle.setText("Mix different ID cards on the same A4 sheet");mixedToggle.setTextSize(16);mixedToggle.setPadding(6,12,6,12);root.addView(mixedToggle);
-    mixedToggle.setOnCheckedChangeListener((button,checked)->{mixedA4=checked;refresh();status.setText(checked?"Mixed A4: up to 5 front/back pairs per sheet.":"Each ID card on a separate A4 sheet.");});
-    addButton(root,"Print order: choose first card",()->{
-      final String[] labels={"Card 1","Card 2","Card 3","Card 4"};
-      new android.app.AlertDialog.Builder(this).setTitle("Which card prints first?").setSingleChoiceItems(labels,firstCardNumber-1,(dialog,which)->{firstCardNumber=which+1;refresh();status.setText("Card "+firstCardNumber+" prints first.");dialog.dismiss();}).setNegativeButton("Cancel",null).show();
-    });
-    addButton(root,"Clear cards 2–4",()->{extraFront=new Bitmap[4];extraBack=new Bitmap[4];secondFront=null;secondBack=null;refresh();status.setText("Additional cards cleared.");});
+    TextView previewTitle=section("A4 print preview");root.addView(previewTitle);
+    LinearLayout.LayoutParams sheetParams=new LinearLayout.LayoutParams(-1,320);sheetParams.bottomMargin=18;root.addView(sheetPreview,sheetParams);
     root.addView(section("3  Print or save"));
     addButton(root,"🖨  Print A4",()->{if(!ready())return;printSheet();});
     addButton(root,"Save as JPG",()->{if(ready()){if(pageCount()>1)status.setText("JPG saves page 1 only. Save PDF for all A4 sheets.");JpgExport.choose(this,SAVE_JPG,"JB-ID-Cards-A4.jpg");}});
@@ -174,6 +154,47 @@ public class MainActivity extends Activity {
       refresh();
     }catch(Exception e){status.setText("Image error: "+e.getMessage());}
   }
+  void showImportChoices(){
+    String[] choices={"Camera - front","Camera - back","Gallery / JPG / PNG / PDF"};
+    new android.app.AlertDialog.Builder(this).setTitle("Add ID card").setItems(choices,(dialog,which)->{
+      if(which==0)openCamera(CAMERA_FRONT);
+      else if(which==1)openCamera(CAMERA_BACK);
+      else{Intent i=new Intent(Intent.ACTION_OPEN_DOCUMENT);i.setType("*/*");i.addCategory(Intent.CATEGORY_OPENABLE);i.putExtra(Intent.EXTRA_MIME_TYPES,new String[]{"image/jpeg","image/png","image/webp","application/pdf"});startActivityForResult(i,PICK_DOCUMENT);}
+    }).show();
+  }
+  void renderCardList(){
+    if(cardList==null)return;
+    cardList.removeAllViews();
+    for(int id=0;id<4;id++){
+      final int index=id;
+      Bitmap f=id==0?front:extraFront[id],b=id==0?back:extraBack[id];
+      if(id>0&&f==null&&b==null&&id>firstEmptyCard())continue;
+      LinearLayout panel=new LinearLayout(this);panel.setOrientation(1);panel.setPadding(12,10,12,14);panel.setBackground(rounded(Color.WHITE,18));
+      LinearLayout.LayoutParams margin=new LinearLayout.LayoutParams(-1,-2);margin.bottomMargin=12;cardList.addView(panel,margin);
+      TextView heading=section("Card "+(id+1)+"  •  "+(f!=null&&b!=null?"Ready":f!=null||b!=null?"Needs other side":"Add card"));panel.addView(heading);
+      if(f!=null){ImageView image=new ImageView(this);image.setImageBitmap(previewBitmap(f));image.setAdjustViewBounds(true);image.setMaxHeight(125);panel.addView(image);}
+      addButton(panel,"✂  Front: "+(f==null?"select and crop":"edit crop"),()->cropSlot(index,true));
+      if(b!=null){ImageView image=new ImageView(this);image.setImageBitmap(previewBitmap(b));image.setAdjustViewBounds(true);image.setMaxHeight(125);panel.addView(image);}
+      addButton(panel,"✂  Back: "+(b==null?"select and crop":"edit crop"),()->cropSlot(index,false));
+      if(f!=null||b!=null){
+        TextView count=section("Copies: "+cardCopies[id]);panel.addView(count);
+        SeekBar slider=new SeekBar(this);slider.setMax(4);slider.setProgress(cardCopies[id]-1);panel.addView(slider);
+        slider.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener(){
+          public void onProgressChanged(SeekBar bar,int value,boolean fromUser){cardCopies[index]=value+1;count.setText("Copies: "+cardCopies[index]);updateSheet();}
+          public void onStartTrackingTouch(SeekBar bar){}
+          public void onStopTrackingTouch(SeekBar bar){}
+        });
+      }
+    }
+  }
+  int firstEmptyCard(){for(int i=1;i<4;i++)if(extraFront[i]==null&&extraBack[i]==null)return i;return 3;}
+  void cropSlot(int index,boolean isFront){
+    selectedExtra=index;
+    Uri uri=sourceDocument;
+    if(index==0)uri=isFront&&frontUri!=null?frontUri:(!isFront&&backUri!=null?backUri:sourceDocument);
+    if(uri==null){showImportChoices();return;}
+    openCrop(uri,index==0?(isFront?CROP_FRONT:CROP_BACK):(isFront?CROP_SECOND_FRONT:CROP_SECOND_BACK));
+  }
   void rotateCard(boolean isFront){
     Bitmap src=isFront?front:back;
     if(src==null){status.setText("Select a photo first.");return;}
@@ -183,7 +204,7 @@ public class MainActivity extends Activity {
     refresh();status.setText("Photo rotated. Check the A4 preview.");
   }
   void updateSheet(){if(sheetPreview!=null)sheetPreview.invalidate();}
-  void refresh(){updateSheet();frontView.setImageDrawable(null);backView.setImageDrawable(null);frontView.setImageBitmap(previewBitmap(front));backView.setImageBitmap(previewBitmap(back));frontView.invalidate();backView.invalidate();}
+  void refresh(){updateSheet();renderCardList();}
   boolean ready(){if(front==null||back==null){status.setText("Please select FRONT and BACK first.");return false;}return true;}
   Bitmap autoCrop(Bitmap src){
     if(src==null||!cvReady)return src;
