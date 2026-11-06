@@ -129,6 +129,75 @@ public final class CardDetector {
       return original;
     }finally{rgba.release();small.release();gray.release();edges.release();hierarchy.release();}
   }
+  // Find multiple non-overlapping card rectangles; returns largest reliable matches first.
+  public static java.util.List<Bitmap> detectAll(Bitmap source,int limit){
+    java.util.ArrayList<Bitmap> results=new java.util.ArrayList<>();
+    if(source==null||limit<1)return results;
+    Mat rgba=new Mat(),small=new Mat(),gray=new Mat(),edges=new Mat(),hierarchy=new Mat();
+    try{
+      Utils.bitmapToMat(source,rgba);
+      double factor=Math.min(1.0,1100.0/Math.max(source.getWidth(),source.getHeight()));
+      Imgproc.resize(rgba,small,new Size(),factor,factor,Imgproc.INTER_AREA);
+      Imgproc.cvtColor(small,gray,Imgproc.COLOR_RGBA2GRAY);
+      Imgproc.GaussianBlur(gray,gray,new Size(3,3),0);
+      java.util.ArrayList<Point[]> candidates=new java.util.ArrayList<>();
+      java.util.ArrayList<Double> scores=new java.util.ArrayList<>();
+      Mat enhanced=new Mat();
+      Imgproc.createCLAHE(3.0,new Size(8,8)).apply(gray,enhanced);
+      for(int pass=0;pass<4;pass++){
+        if(pass==3)Imgproc.adaptiveThreshold(enhanced,edges,255,Imgproc.ADAPTIVE_THRESH_GAUSSIAN_C,Imgproc.THRESH_BINARY,31,8);
+        else Imgproc.Canny(pass==2?enhanced:gray,edges,pass==0?12:pass==1?30:15,pass==0?40:pass==1?95:50);
+        Mat kernel=Imgproc.getStructuringElement(Imgproc.MORPH_RECT,new Size(3,3));
+        Imgproc.morphologyEx(edges,edges,Imgproc.MORPH_CLOSE,kernel);kernel.release();
+        java.util.List<MatOfPoint> contours=new java.util.ArrayList<>();
+        Imgproc.findContours(edges,contours,hierarchy,Imgproc.RETR_LIST,Imgproc.CHAIN_APPROX_SIMPLE);
+        double frame=small.width()*small.height();
+        for(MatOfPoint contour:contours){
+          double area=Math.abs(Imgproc.contourArea(contour));
+          if(area<frame*.003||area>frame*.80){contour.release();continue;}
+          MatOfPoint2f curve=new MatOfPoint2f(contour.toArray()),approx=new MatOfPoint2f();
+          Imgproc.approxPolyDP(curve,approx,.025*Imgproc.arcLength(curve,true),true);
+          Point[] points=approx.toArray();
+          if(points.length!=4){
+            RotatedRect rect=Imgproc.minAreaRect(curve);
+            if(area/Math.max(1,rect.size.width*rect.size.height)>.82){points=new Point[4];rect.points(points);}
+          }
+          if(points.length==4){
+            MatOfPoint poly=new MatOfPoint(points);boolean convex=Imgproc.isContourConvex(poly);poly.release();
+            if(convex){
+              Point[] q=order(points);
+              double w=(dist(q[0],q[1])+dist(q[2],q[3]))/2,h=(dist(q[0],q[3])+dist(q[1],q[2]))/2;
+              double ratio=Math.max(w,h)/Math.max(1,Math.min(w,h));
+              Rect bounds=Imgproc.boundingRect(new MatOfPoint(q));
+              double score=area/frame-Math.abs(ratio-85.6/54.0)*.2;
+              if(ratio>1.34&&ratio<1.86&&bounds.width>25&&bounds.height>18&&score>-.06){
+                boolean duplicate=false;
+                for(Point[] prior:candidates){
+                  Rect old=Imgproc.boundingRect(new MatOfPoint(prior));
+                  Rect overlap=old.intersect(bounds);
+                  double shared=overlap.area()/Math.max(1,Math.min(old.area(),bounds.area()));
+                  if(shared>.65){duplicate=true;break;}
+                }
+                if(!duplicate){candidates.add(q);scores.add(score);}
+              }
+            }
+          }
+          curve.release();approx.release();contour.release();
+        }
+      }
+      enhanced.release();
+      java.util.ArrayList<Integer> orderIds=new java.util.ArrayList<>();
+      for(int i=0;i<candidates.size();i++)orderIds.add(i);
+      java.util.Collections.sort(orderIds,(a,b)->Double.compare(scores.get(b),scores.get(a)));
+      for(int idx:orderIds){
+        if(results.size()>=limit)break;
+        Point[] q=candidates.get(idx),scaled=new Point[4];
+        for(int i=0;i<4;i++)scaled[i]=new Point(q[i].x/factor,q[i].y/factor);
+        try{Bitmap card=warp(source,scaled);if(card!=null)results.add(card);}catch(Exception ignored){}
+      }
+      return results;
+    }finally{rgba.release();small.release();gray.release();edges.release();hierarchy.release();}
+  }
   static double dist(Point a,Point b){return Math.hypot(a.x-b.x,a.y-b.y);}
   static Point[] order(Point[] points){
     // Angle-based ordering avoids duplicated corners on steeply rotated cards.
