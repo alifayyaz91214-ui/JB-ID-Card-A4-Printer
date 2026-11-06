@@ -174,8 +174,9 @@ public final class CardDetector {
                 boolean duplicate=false;
                 for(Point[] prior:candidates){
                   Rect old=Imgproc.boundingRect(new MatOfPoint(prior));
-                  Rect overlap=old.intersect(bounds);
-                  double shared=overlap.area()/Math.max(1,Math.min(old.area(),bounds.area()));
+                  double ow=Math.max(0,Math.min(old.x+old.width,bounds.x+bounds.width)-Math.max(old.x,bounds.x));
+                  double oh=Math.max(0,Math.min(old.y+old.height,bounds.y+bounds.height)-Math.max(old.y,bounds.y));
+                  double shared=ow*oh/Math.max(1,Math.min(old.area(),bounds.area()));
                   if(shared>.65){duplicate=true;break;}
                 }
                 if(!duplicate){candidates.add(q);scores.add(score);}
