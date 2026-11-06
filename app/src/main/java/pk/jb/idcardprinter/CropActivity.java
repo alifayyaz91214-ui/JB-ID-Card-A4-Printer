@@ -12,11 +12,28 @@ import java.io.*;
 public class CropActivity extends Activity {
   CropView cropView;
   TextView help;
+  TextView selectedLabel;
   @Override public void onCreate(Bundle state) {
     super.onCreate(state);
     LinearLayout root=new LinearLayout(this);root.setOrientation(1);root.setPadding(12,12,12,12);
-    help=new TextView(this);help.setText("Drag the 4 circles to the card corners. Zoom is not required; use the preview.\nTop-left, top-right, bottom-right, bottom-left.");help.setTextSize(16);root.addView(help);
+    help=new TextView(this);help.setText("Zoom in to inspect corners. Select TL/TR/BR/BL then use arrow buttons for precise adjustments without covering the corner with your finger.");help.setTextSize(16);root.addView(help);
     cropView=new CropView();root.addView(cropView,new LinearLayout.LayoutParams(-1,0,1));
+    TextView zoomText=new TextView(this);zoomText.setText("Zoom: 100% • Drag outside corner dots or use arrow controls");root.addView(zoomText);
+    SeekBar zoomBar=new SeekBar(this);zoomBar.setMax(300);zoomBar.setProgress(0);root.addView(zoomBar);
+    zoomBar.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener(){
+      public void onProgressChanged(SeekBar bar,int value,boolean user){cropView.zoom=1f+value/100f;zoomText.setText("Zoom: "+Math.round(cropView.zoom*100)+"% • Drag outside dots or use arrows");cropView.invalidate();}
+      public void onStartTrackingTouch(SeekBar bar){}
+      public void onStopTrackingTouch(SeekBar bar){}
+    });
+    selectedLabel=new TextView(this);selectedLabel.setText("Selected corner: Top Left • tap a dot to change");root.addView(selectedLabel);
+    LinearLayout cornerButtons=new LinearLayout(this);cornerButtons.setOrientation(0);
+    String[] cornerNames={"TL","TR","BR","BL"};
+    for(int k=0;k<4;k++){final int index=k;Button btn=new Button(this);btn.setText(cornerNames[k]);cornerButtons.addView(btn,new LinearLayout.LayoutParams(0,-2,1));btn.setOnClickListener(v->{cropView.selected=index;selectedLabel.setText("Selected corner: "+cornerNames[index]);cropView.invalidate();});}
+    root.addView(cornerButtons);
+    LinearLayout nudges=new LinearLayout(this);nudges.setOrientation(0);
+    String[] arrows={"←","↑","↓","→"};int[] dx={-1,0,0,1},dy={0,-1,1,0};
+    for(int k=0;k<4;k++){final int index=k;Button btn=new Button(this);btn.setText(arrows[k]);nudges.addView(btn,new LinearLayout.LayoutParams(0,-2,1));btn.setOnClickListener(v->cropView.nudge(dx[index],dy[index]));}
+    root.addView(nudges);
     LinearLayout buttons=new LinearLayout(this);buttons.setOrientation(0);
     Button reset=new Button(this);reset.setText("Reset corners");buttons.addView(reset,new LinearLayout.LayoutParams(0,-2,1));reset.setOnClickListener(v->cropView.reset());
     Button save=new Button(this);save.setText("Crop & Save");buttons.addView(save,new LinearLayout.LayoutParams(0,-2,1));save.setOnClickListener(v->save());
@@ -57,23 +74,32 @@ public class CropActivity extends Activity {
   }
   class CropView extends View{
     Bitmap bitmap;float[] points=new float[8];Paint paint=new Paint(3);
-    float scale,ox,oy;int active=-1;
+    float scale,ox,oy;float zoom=1f;int active=-1,selected=0;
+    float touchOffsetX,touchOffsetY;
     CropView(){super(CropActivity.this);setBackgroundColor(Color.rgb(30,30,30));}
     void reset(){
       if(bitmap==null)return;
       float w=bitmap.getWidth(),h=bitmap.getHeight();
       points=new float[]{w*.08f,h*.08f,w*.92f,h*.08f,w*.92f,h*.92f,w*.08f,h*.92f};invalidate();
     }
+    void nudge(int dx,int dy){
+      if(bitmap==null)return;
+      float step=2f/Math.max(.05f,scale);
+      points[2*selected]=Math.max(0,Math.min(bitmap.getWidth(),points[2*selected]+dx*step));
+      points[2*selected+1]=Math.max(0,Math.min(bitmap.getHeight(),points[2*selected+1]+dy*step));
+      invalidate();
+    }
     @Override protected void onDraw(Canvas canvas){
       super.onDraw(canvas);if(bitmap==null)return;
-      scale=Math.min((float)getWidth()/bitmap.getWidth(),(float)getHeight()/bitmap.getHeight());
+      scale=Math.min((float)getWidth()/bitmap.getWidth(),(float)getHeight()/bitmap.getHeight())*zoom;
       ox=(getWidth()-bitmap.getWidth()*scale)/2f;oy=(getHeight()-bitmap.getHeight()*scale)/2f;
+      canvas.save();canvas.clipRect(0,0,getWidth(),getHeight());
       canvas.drawBitmap(bitmap,null,new RectF(ox,oy,ox+bitmap.getWidth()*scale,oy+bitmap.getHeight()*scale),paint);
       Path path=new Path();path.moveTo(ox+points[0]*scale,oy+points[1]*scale);
       for(int i=1;i<4;i++)path.lineTo(ox+points[i*2]*scale,oy+points[i*2+1]*scale);
       path.close();paint.setColor(Color.YELLOW);paint.setStyle(Paint.Style.STROKE);paint.setStrokeWidth(4);canvas.drawPath(path,paint);paint.setStyle(Paint.Style.FILL);
-      for(int i=0;i<4;i++){float x=ox+points[2*i]*scale,y=oy+points[2*i+1]*scale;paint.setColor(Color.BLACK);canvas.drawCircle(x,y,19,paint);paint.setColor(Color.YELLOW);canvas.drawCircle(x,y,13,paint);}
-      paint.setColor(Color.WHITE);
+      for(int i=0;i<4;i++){float x=ox+points[2*i]*scale,y=oy+points[2*i+1]*scale;paint.setColor(Color.BLACK);canvas.drawCircle(x,y,19,paint);paint.setColor(i==selected?Color.CYAN:Color.YELLOW);canvas.drawCircle(x,y,13,paint);}
+      paint.setColor(Color.WHITE);canvas.restore();
     }
     @Override public boolean onTouchEvent(android.view.MotionEvent e){
       if(bitmap==null)return false;
@@ -81,10 +107,13 @@ public class CropActivity extends Activity {
       if(e.getAction()==MotionEvent.ACTION_DOWN){
         float best=Float.MAX_VALUE;active=-1;
         for(int i=0;i<4;i++){float d=(x-points[2*i])*(x-points[2*i])+(y-points[2*i+1])*(y-points[2*i+1]);if(d<best){best=d;active=i;}}
-        return true;
+        selected=active;
+        // Maintain a finger-to-corner offset: the thumb can stay away from the exact edge.
+        touchOffsetX=points[2*active]-x;touchOffsetY=points[2*active+1]-y;
+        invalidate();return true;
       }
       if(e.getAction()==MotionEvent.ACTION_MOVE&&active>=0){
-        points[2*active]=Math.max(0,Math.min(bitmap.getWidth(),x));points[2*active+1]=Math.max(0,Math.min(bitmap.getHeight(),y));invalidate();return true;
+        points[2*active]=Math.max(0,Math.min(bitmap.getWidth(),x+touchOffsetX));points[2*active+1]=Math.max(0,Math.min(bitmap.getHeight(),y+touchOffsetY));invalidate();return true;
       }
       if(e.getAction()==MotionEvent.ACTION_UP){active=-1;return true;}
       return true;
