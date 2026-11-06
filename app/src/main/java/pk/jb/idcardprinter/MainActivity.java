@@ -107,7 +107,7 @@ public class MainActivity extends Activity {
           cropped=autoCrop(bmp);
         }catch(Exception e){error=e.getMessage();}
         final Bitmap source=bmp,resultBitmap=cropped;final String failure=error;
-        runOnUiThread(()->{if(isFinishing()||isDestroyed())return;if(failure!=null){status.setText("Camera image error: "+failure);return;}if(isFront){originalFront=source;front=resultBitmap;frontUri=Uri.fromFile(new File(path));}else{originalBack=source;back=resultBitmap;backUri=Uri.fromFile(new File(path));}refresh();status.setText(resultBitmap==source?"Card captured; auto perspective detection was uncertain. Use Manual Crop if needed.":"Card captured and perspective-straightened. Check edges in preview.");});
+        runOnUiThread(()->{if(isFinishing()||isDestroyed())return;if(failure!=null){status.setText("Camera image error: "+failure);return;}if(isFront){originalFront=source;front=resultBitmap;frontUri=Uri.fromFile(new File(path));}else{originalBack=source;back=resultBitmap;backUri=Uri.fromFile(new File(path));}refresh();if(resultBitmap==source){status.setText("Card edges not detected. Opening 4-corner crop so hands and background are removed.");openCrop(Uri.fromFile(new File(path)),isFront?CROP_FRONT:CROP_BACK);}else{status.setText("Card captured and perspective-straightened. Check edges in preview.");}});
       }).start();return;
     }
     if(request==CROP_FRONT||request==CROP_BACK){try{String path=data.getStringExtra("cropPath");Bitmap bmp=BitmapFactory.decodeFile(path);if(bmp==null)throw new IOException("Cropped image unavailable");if(request==CROP_FRONT)front=bmp;else back=bmp;refresh();status.setText("Manual crop saved.");}catch(Exception e){status.setText("Crop error: "+e.getMessage());}return;}
