@@ -55,6 +55,7 @@ public class MainActivity extends Activity {
     addButton(root,"+  Add photo or document",()->showImportChoices());
     TextView instruction=new TextView(this);instruction.setText("Choose Camera or Gallery. Then crop each card front and back.");instruction.setTextColor(navy);instruction.setPadding(8,4,8,12);root.addView(instruction);
     importedPreview=new ImageView(this);importedPreview.setAdjustViewBounds(true);importedPreview.setMaxHeight(240);root.addView(importedPreview);
+    addButton(root,"Start new sheet / Clear all cards",()->{front=null;back=null;originalFront=null;originalBack=null;extraFront=new Bitmap[4];extraBack=new Bitmap[4];cardFrontSources=new Uri[4];cardBackSources=new Uri[4];shownCards=1;sourceDocument=null;importedPreview.setImageDrawable(null);refresh();status.setText("New empty sheet. Add a photo or document.");});
     cardList=new LinearLayout(this);cardList.setOrientation(1);root.addView(cardList);
     frontView=new ImageView(this);backView=new ImageView(this);
     frontView.setAdjustViewBounds(true);backView.setAdjustViewBounds(true);
@@ -183,6 +184,7 @@ public class MainActivity extends Activity {
       if(b!=null){ImageView image=new ImageView(this);image.setImageBitmap(previewBitmap(b));image.setAdjustViewBounds(true);image.setMaxHeight(125);panel.addView(image);}
       addButton(panel,"✂  Back: "+(b==null?"select and crop":"edit crop"),()->cropSlot(index,false));
       if(f!=null||b!=null){
+        addButton(panel,"Remove this card",()->{if(index==0){front=null;back=null;}else{extraFront[index]=null;extraBack[index]=null;}cardFrontSources[index]=null;cardBackSources[index]=null;refresh();});
         TextView count=section("Copies: "+cardCopies[id]);panel.addView(count);
         SeekBar slider=new SeekBar(this);slider.setMax(4);slider.setProgress(cardCopies[id]-1);panel.addView(slider);
         slider.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener(){
