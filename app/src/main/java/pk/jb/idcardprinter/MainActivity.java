@@ -34,6 +34,7 @@ public class MainActivity extends Activity {
   int importPage=0;
   int scanSerial=0;
   boolean importingFront=true;
+  String[] frontNumbers=new String[4],backNumbers=new String[4];
   boolean[] selectedCards={true,true,true,true};
   TextView status;
   View sheetPreview;
@@ -59,7 +60,7 @@ public class MainActivity extends Activity {
     addButton(root,"2  Add BACK document",()->beginSideImport(false));
     TextView instruction=new TextView(this);instruction.setText("Add all fronts first, then add backs in the same order. Check each card below.");instruction.setTextColor(navy);instruction.setPadding(8,4,8,12);root.addView(instruction);
     importedPreview=new ImageView(this);importedPreview.setAdjustViewBounds(true);importedPreview.setMaxHeight(300);root.addView(importedPreview);
-    addButton(root,"Start new sheet / Clear all cards",()->{scanSerial++;selectedCards=new boolean[]{true,true,true,true};front=null;back=null;originalFront=null;originalBack=null;extraFront=new Bitmap[4];extraBack=new Bitmap[4];cardFrontSources=new Uri[4];cardBackSources=new Uri[4];shownCards=1;sourceDocument=null;importedPreview.setImageDrawable(null);refresh();status.setText("New empty sheet. Add a photo or document.");});
+    addButton(root,"Start new sheet / Clear all cards",()->{scanSerial++;selectedCards=new boolean[]{true,true,true,true};frontNumbers=new String[4];backNumbers=new String[4];front=null;back=null;originalFront=null;originalBack=null;extraFront=new Bitmap[4];extraBack=new Bitmap[4];cardFrontSources=new Uri[4];cardBackSources=new Uri[4];shownCards=1;sourceDocument=null;importedPreview.setImageDrawable(null);refresh();status.setText("New empty sheet. Add a photo or document.");});
     cardList=new LinearLayout(this);cardList.setOrientation(1);root.addView(cardList);
     frontView=new ImageView(this);backView=new ImageView(this);
     frontView.setAdjustViewBounds(true);backView.setAdjustViewBounds(true);
@@ -223,7 +224,7 @@ public class MainActivity extends Activity {
   void assignSide(int id,boolean isFront,Bitmap bitmap,Uri uri){
     if(id==0){if(isFront)front=bitmap;else back=bitmap;}
     else{if(isFront)extraFront[id]=bitmap;else extraBack[id]=bitmap;}
-    if(isFront)cardFrontSources[id]=uri;else cardBackSources[id]=uri;
+    if(isFront){cardFrontSources[id]=uri;frontNumbers[id]=null;}else{cardBackSources[id]=uri;backNumbers[id]=null;}
     selectedCards[id]=true;shownCards=Math.max(shownCards,id+1);
   }
   void assignDetected(java.util.List<Bitmap> found,Uri uri,int position){
@@ -246,6 +247,50 @@ public class MainActivity extends Activity {
       }).setNegativeButton("Skip image",(dialog,which)->assignDetected(found,uri,position+1))
       .setCancelable(false).show();
   }
+  void matchScannedSides(java.util.List<Bitmap> cards,Uri uri,boolean frontSide,int position,int serial,int matched,int review){
+    if(serial!=scanSerial||isFinishing()||isDestroyed())return;
+    if(position>=cards.size()||position>=4){
+      refresh();
+      status.setText(matched+" side(s) matched by CNIC number; "+review+" need manual review. Confirm the pairs before printing.");
+      return;
+    }
+    Bitmap candidate=cards.get(position);
+    CnicOcr.read(candidate,number->{
+      if(serial!=scanSerial||isFinishing()||isDestroyed())return;
+      int match=-1;
+      if(number!=null){
+        for(int i=0;i<4;i++){
+          String opposite=frontSide?backNumbers[i]:frontNumbers[i];
+          if(number.equals(opposite)&&sideBitmap(i,frontSide)==null){match=i;break;}
+        }
+      }
+      if(match>=0){
+        assignSide(match,frontSide,candidate,uri);
+        if(frontSide)frontNumbers[match]=number;else backNumbers[match]=number;
+        matchScannedSides(cards,uri,frontSide,position+1,serial,matched+1,review);
+        return;
+      }
+      // Never silently pair a back to a front based only on scan order.
+      final String detected=number;
+      String[] choices={"Card 1","Card 2","Card 3","Card 4","Skip this image"};
+      new android.app.AlertDialog.Builder(this)
+        .setTitle(number==null?"CNIC number not readable":"CNIC number not matched")
+        .setMessage("Image "+(position+1)+" of "+cards.size()+". Choose the correct "+(frontSide?"FRONT":"BACK")+" card. OCR: "+(number==null?"unavailable":"••••"+number.substring(9)))
+        .setItems(choices,(dialog,which)->{
+          if(which==4){matchScannedSides(cards,uri,frontSide,position+1,serial,matched,review+1);return;}
+          if(sideBitmap(which,frontSide)!=null){
+            new android.app.AlertDialog.Builder(this).setTitle("Replace existing side?")
+              .setMessage("Card "+(which+1)+" already has this side. Replace it?")
+              .setPositiveButton("Replace",(d,w)->{assignSide(which,frontSide,candidate,uri);if(frontSide)frontNumbers[which]=detected;else backNumbers[which]=detected;matchScannedSides(cards,uri,frontSide,position+1,serial,matched,review+1);})
+              .setNegativeButton("Choose again",(d,w)->matchScannedSides(cards,uri,frontSide,position,serial,matched,review)).show();
+          }else{
+            assignSide(which,frontSide,candidate,uri);
+            if(frontSide)frontNumbers[which]=detected;else backNumbers[which]=detected;
+            matchScannedSides(cards,uri,frontSide,position+1,serial,matched,review+1);
+          }
+        }).setCancelable(false).show();
+    });
+  }
   void scanDocument(Bitmap image,Uri uri){
     if(image==null){status.setText("Could not read photo.");return;}
     final int serial=++scanSerial;
@@ -263,13 +308,20 @@ public class MainActivity extends Activity {
           status.setText("No reliable card edges found. Use Front / Back manual crop."+(problem==null?"":" "+problem));
           return;
         }
-        int added=0;
-        for(int i=0;i<cards.size()&&i<4;i++){
-          assignSide(i,sideIsFront,cards.get(i),uri);
-          added++;
+        if(sideIsFront){
+          // Fronts are placed in the first available slots, then their OCR numbers are stored.
+          int added=0;
+          for(Bitmap card:cards){
+            int slot=-1;for(int i=0;i<4;i++)if(sideBitmap(i,true)==null){slot=i;break;}
+            if(slot<0)break;
+            final int id=slot;assignSide(id,true,card,uri);added++;
+            CnicOcr.read(card,number->{if(serial==scanSerial){frontNumbers[id]=number;refresh();}});
+          }
+          refresh();status.setText(added+" FRONT sides added. Now import BACK document to auto-match CNIC numbers.");
+        }else{
+          status.setText("Reading CNIC numbers to match BACK sides...");
+          matchScannedSides(cards,uri,false,0,serial,0,0);
         }
-        refresh();
-        status.setText(added+(sideIsFront?" FRONT":" BACK")+" side(s) added to Card 1–"+added+". Check matching and crop. You can move any side to another card.");
       });
     }).start();
   }
