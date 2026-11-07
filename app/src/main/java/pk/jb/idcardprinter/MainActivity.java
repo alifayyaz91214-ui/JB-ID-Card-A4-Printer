@@ -19,7 +19,7 @@ public class MainActivity extends Activity {
   Bitmap secondFront,secondBack;
   Bitmap[] extraFront=new Bitmap[4],extraBack=new Bitmap[4];
   int selectedExtra=1,firstCardNumber=1;
-  int[] cardCopies={4,4,4,4};
+  int[] cardCopies={1,1,1,1};
   Uri sourceDocument;
   Uri[] cardFrontSources=new Uri[4],cardBackSources=new Uri[4];
   int pendingCropCard=0;
@@ -29,6 +29,7 @@ public class MainActivity extends Activity {
   Uri frontUri, backUri;
   ImageView frontView, backView;
   LinearLayout cardList;
+  LinearLayout copiesPanel;
   ImageView importedPreview;
   int shownCards=1;
   int importPage=0;
@@ -111,15 +112,12 @@ public class MainActivity extends Activity {
     String[] positionNames={"Top","Center","Bottom"};
     for(int i=0;i<3;i++){RadioButton rb=new RadioButton(this);rb.setId(720+i);rb.setText(positionNames[i]);positions.addView(rb);}
     positions.check(721);positions.setOnCheckedChangeListener((g,id)->{verticalPosition=id-720;updateSheet();});advanced.addView(positions);
-    root.addView(section("2  Select copies for each card, or use a quick layout"));
+    root.addView(section("2  Choose copies for each card"));
     CheckBox mixedToggle=new CheckBox(this);mixedToggle.setText("Mix selected cards on one A4 sheet");mixedToggle.setChecked(true);mixedA4=true;root.addView(mixedToggle);
     mixedToggle.setOnCheckedChangeListener((button,checked)->{mixedA4=checked;refresh();});
-    addButton(root,"Quick copies: Card 1 = 2, Card 2 = 2",()->applyCopyPreset(new int[]{2,2,0,0}));
-    addButton(root,"Quick copies: Cards 1–4 = 1 each",()->applyCopyPreset(new int[]{1,1,1,1}));
-    addButton(root,"Choose first card to print",()->{
-      String[] labels={"Card 1","Card 2","Card 3","Card 4"};
-      new android.app.AlertDialog.Builder(this).setTitle("Print first").setItems(labels,(dialog,which)->{firstCardNumber=which+1;refresh();}).show();
-    });
+    TextView hint=new TextView(this);hint.setText("Use − / + for each card. Set 0 to skip. Up to 5 pairs fit on one A4 page.");hint.setTextColor(navy);root.addView(hint);
+    copiesPanel=new LinearLayout(this);copiesPanel.setOrientation(1);root.addView(copiesPanel);
+    renderCopiesPanel();
     TextView previewTitle=section("A4 print preview");root.addView(previewTitle);
     LinearLayout.LayoutParams sheetParams=new LinearLayout.LayoutParams(-1,490);sheetParams.bottomMargin=18;root.addView(sheetPreview,sheetParams);
     root.addView(section("3  Print or save"));
@@ -176,6 +174,38 @@ public class MainActivity extends Activity {
       else{Intent i=new Intent(Intent.ACTION_OPEN_DOCUMENT);i.setType("*/*");i.addCategory(Intent.CATEGORY_OPENABLE);i.putExtra(Intent.EXTRA_MIME_TYPES,new String[]{"image/jpeg","image/png","image/webp","application/pdf"});startActivityForResult(i,PICK_DOCUMENT);}
     }).show();
   }
+  void setCopiesForCard(int index,int count){
+    cardCopies[index]=Math.max(0,Math.min(20,count));
+    selectedCards[index]=cardCopies[index]>0;
+    renderCopiesPanel();renderCardList();updateSheet();
+    if(status!=null)status.setText("Selected "+totalPairs()+" pair(s) on "+pageCount()+" A4 page(s).");
+  }
+  int totalPairs(){
+    int total=0;for(int id:activeCards())total+=cardCopies[id];return total;
+  }
+  void renderCopiesPanel(){
+    if(copiesPanel==null)return;
+    copiesPanel.removeAllViews();
+    for(int i=0;i<4;i++){
+      final int id=i;
+      LinearLayout line=new LinearLayout(this);line.setGravity(Gravity.CENTER_VERTICAL);line.setPadding(8,6,8,6);
+      TextView label=new TextView(this);label.setText("Card "+(i+1));label.setTextColor(navy);label.setTextSize(17);label.setTypeface(null,Typeface.BOLD);
+      line.addView(label,new LinearLayout.LayoutParams(0,-2,1));
+      Button minus=new Button(this);minus.setText("−");styleAction(minus,false);
+      line.addView(minus,new LinearLayout.LayoutParams(65,-2));
+      TextView number=new TextView(this);number.setText(""+(selectedCards[i]?cardCopies[i]:0));number.setTextColor(navy);number.setTextSize(20);number.setGravity(Gravity.CENTER);
+      line.addView(number,new LinearLayout.LayoutParams(56,-2));
+      Button plus=new Button(this);plus.setText("+");styleAction(plus,false);
+      line.addView(plus,new LinearLayout.LayoutParams(65,-2));
+      minus.setOnClickListener(v->setCopiesForCard(id,(selectedCards[id]?cardCopies[id]:0)-1));
+      plus.setOnClickListener(v->{
+        if(sideBitmap(id,true)==null&&sideBitmap(id,false)==null){if(status!=null)status.setText("Add Card "+(id+1)+" first.");return;}
+        setCopiesForCard(id,(selectedCards[id]?cardCopies[id]:0)+1);
+      });
+      copiesPanel.addView(line);
+    }
+    TextView total=new TextView(this);total.setText("Total: "+totalPairs()+" card pair(s)  •  "+pageCount()+" A4 page(s)");total.setTextColor(navy);total.setTextSize(16);total.setPadding(8,12,8,12);copiesPanel.addView(total);
+  }
   void applyCopyPreset(int[] counts){
     mixedA4=true;
     for(int i=0;i<4;i++){
@@ -194,7 +224,7 @@ public class MainActivity extends Activity {
       if(id>=shownCards&&f==null&&b==null)continue;
       LinearLayout panel=new LinearLayout(this);panel.setOrientation(1);panel.setPadding(12,10,12,14);panel.setBackground(rounded(Color.WHITE,18));
       LinearLayout.LayoutParams margin=new LinearLayout.LayoutParams(-1,-2);margin.bottomMargin=12;cardList.addView(panel,margin);
-      CheckBox include=new CheckBox(this);include.setText("Card "+(id+1)+"  •  "+(f!=null&&b!=null?"Front + Back":f!=null?"Front only":b!=null?"Back only":"Add card"));include.setTextSize(17);include.setTypeface(null,Typeface.BOLD);include.setChecked(selectedCards[id]);panel.addView(include);include.setOnCheckedChangeListener((button,checked)->{selectedCards[index]=checked;updateSheet();});
+      CheckBox include=new CheckBox(this);include.setText("Card "+(id+1)+"  •  "+(f!=null&&b!=null?"Front + Back":f!=null?"Front only":b!=null?"Back only":"Add card"));include.setTextSize(17);include.setTypeface(null,Typeface.BOLD);include.setChecked(selectedCards[id]);panel.addView(include);include.setOnCheckedChangeListener((button,checked)->{selectedCards[index]=checked;if(checked&&cardCopies[index]==0)cardCopies[index]=1;renderCopiesPanel();updateSheet();});
       if(f!=null){ImageView image=new ImageView(this);image.setImageBitmap(previewBitmap(f));image.setAdjustViewBounds(true);image.setScaleType(ImageView.ScaleType.FIT_CENTER);LinearLayout.LayoutParams imageParams=new LinearLayout.LayoutParams(-1,320);panel.addView(image,imageParams);}
       addButton(panel,"✂  Front: "+(f==null?"select and crop":"edit crop"),()->cropSlot(index,true));
       if(b!=null){ImageView image=new ImageView(this);image.setImageBitmap(previewBitmap(b));image.setAdjustViewBounds(true);image.setScaleType(ImageView.ScaleType.FIT_CENTER);LinearLayout.LayoutParams imageParams=new LinearLayout.LayoutParams(-1,220);panel.addView(image,imageParams);}
@@ -222,9 +252,9 @@ public class MainActivity extends Activity {
         });
         addButton(panel,"Remove this card",()->{if(index==0){front=null;back=null;}else{extraFront[index]=null;extraBack[index]=null;}cardFrontSources[index]=null;cardBackSources[index]=null;refresh();});
         TextView count=section("Copies: "+cardCopies[id]);panel.addView(count);
-        SeekBar slider=new SeekBar(this);slider.setMax(4);slider.setProgress(cardCopies[id]-1);panel.addView(slider);
+        SeekBar slider=new SeekBar(this);slider.setMax(20);slider.setProgress(cardCopies[id]);panel.addView(slider);
         slider.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener(){
-          public void onProgressChanged(SeekBar bar,int value,boolean fromUser){cardCopies[index]=value+1;count.setText("Copies: "+cardCopies[index]);updateSheet();}
+          public void onProgressChanged(SeekBar bar,int value,boolean fromUser){cardCopies[index]=value;selectedCards[index]=value>0;count.setText("Copies: "+cardCopies[index]);renderCopiesPanel();updateSheet();}
           public void onStartTrackingTouch(SeekBar bar){}
           public void onStopTrackingTouch(SeekBar bar){}
         });
@@ -386,7 +416,7 @@ public class MainActivity extends Activity {
     refresh();status.setText("Photo rotated. Check the A4 preview.");
   }
   void updateSheet(){if(sheetPreview!=null)sheetPreview.invalidate();}
-  void refresh(){updateSheet();renderCardList();}
+  void refresh(){updateSheet();renderCardList();renderCopiesPanel();}
   boolean ready(){if(activeCards().length==0){status.setText("Please crop at least one ID card side first.");return false;}return true;}
   Bitmap autoCrop(Bitmap src){
     if(src==null||!cvReady)return src;
@@ -421,8 +451,8 @@ public class MainActivity extends Activity {
   // Front on left, back on right, repeated in 5 rows with cutting gaps.
   int[] activeCards(){
     java.util.ArrayList<Integer> ids=new java.util.ArrayList<>();
-    if(selectedCards[0]&&(front!=null||back!=null))ids.add(0);
-    for(int i=1;i<4;i++)if(selectedCards[i]&&(extraFront[i]!=null||extraBack[i]!=null))ids.add(i);
+    if(selectedCards[0]&&cardCopies[0]>0&&(front!=null||back!=null))ids.add(0);
+    for(int i=1;i<4;i++)if(selectedCards[i]&&cardCopies[i]>0&&(extraFront[i]!=null||extraBack[i]!=null))ids.add(i);
     if(ids.size()>1){int chosen=firstCardNumber-1;if(ids.remove(Integer.valueOf(chosen)))ids.add(0,chosen);}
     int[] result=new int[ids.size()];for(int i=0;i<result.length;i++)result[i]=ids.get(i);return result;
   }
