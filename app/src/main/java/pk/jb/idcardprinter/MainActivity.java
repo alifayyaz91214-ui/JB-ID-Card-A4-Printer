@@ -111,15 +111,17 @@ public class MainActivity extends Activity {
     String[] positionNames={"Top","Center","Bottom"};
     for(int i=0;i<3;i++){RadioButton rb=new RadioButton(this);rb.setId(720+i);rb.setText(positionNames[i]);positions.addView(rb);}
     positions.check(721);positions.setOnCheckedChangeListener((g,id)->{verticalPosition=id-720;updateSheet();});advanced.addView(positions);
-    root.addView(section("2  Select cards and copies above, then choose A4 layout"));
+    root.addView(section("2  Select copies for each card, or use a quick layout"));
     CheckBox mixedToggle=new CheckBox(this);mixedToggle.setText("Mix selected cards on one A4 sheet");mixedToggle.setChecked(true);mixedA4=true;root.addView(mixedToggle);
     mixedToggle.setOnCheckedChangeListener((button,checked)->{mixedA4=checked;refresh();});
+    addButton(root,"Quick copies: Card 1 = 2, Card 2 = 2",()->applyCopyPreset(new int[]{2,2,0,0}));
+    addButton(root,"Quick copies: Cards 1–4 = 1 each",()->applyCopyPreset(new int[]{1,1,1,1}));
     addButton(root,"Choose first card to print",()->{
       String[] labels={"Card 1","Card 2","Card 3","Card 4"};
       new android.app.AlertDialog.Builder(this).setTitle("Print first").setItems(labels,(dialog,which)->{firstCardNumber=which+1;refresh();}).show();
     });
     TextView previewTitle=section("A4 print preview");root.addView(previewTitle);
-    LinearLayout.LayoutParams sheetParams=new LinearLayout.LayoutParams(-1,320);sheetParams.bottomMargin=18;root.addView(sheetPreview,sheetParams);
+    LinearLayout.LayoutParams sheetParams=new LinearLayout.LayoutParams(-1,490);sheetParams.bottomMargin=18;root.addView(sheetPreview,sheetParams);
     root.addView(section("3  Print or save"));
     addButton(root,"🖨  Print A4",()->{if(!ready())return;printSheet();});
     addButton(root,"Save as JPG",()->{if(ready()){if(pageCount()>1)status.setText("JPG saves page 1 only. Save PDF for all A4 sheets.");JpgExport.choose(this,SAVE_JPG,"JB-ID-Cards-A4.jpg");}});
@@ -174,6 +176,15 @@ public class MainActivity extends Activity {
       else{Intent i=new Intent(Intent.ACTION_OPEN_DOCUMENT);i.setType("*/*");i.addCategory(Intent.CATEGORY_OPENABLE);i.putExtra(Intent.EXTRA_MIME_TYPES,new String[]{"image/jpeg","image/png","image/webp","application/pdf"});startActivityForResult(i,PICK_DOCUMENT);}
     }).show();
   }
+  void applyCopyPreset(int[] counts){
+    mixedA4=true;
+    for(int i=0;i<4;i++){
+      cardCopies[i]=Math.max(1,counts[i]);
+      selectedCards[i]=counts[i]>0&&sideBitmap(i,true)!=null||counts[i]>0&&sideBitmap(i,false)!=null;
+    }
+    refresh();
+    status.setText("Mixed A4 ready: "+pageCount()+" page(s). Check the A4 preview before printing.");
+  }
   void renderCardList(){
     if(cardList==null)return;
     cardList.removeAllViews();
@@ -184,7 +195,7 @@ public class MainActivity extends Activity {
       LinearLayout panel=new LinearLayout(this);panel.setOrientation(1);panel.setPadding(12,10,12,14);panel.setBackground(rounded(Color.WHITE,18));
       LinearLayout.LayoutParams margin=new LinearLayout.LayoutParams(-1,-2);margin.bottomMargin=12;cardList.addView(panel,margin);
       CheckBox include=new CheckBox(this);include.setText("Card "+(id+1)+"  •  "+(f!=null&&b!=null?"Front + Back":f!=null?"Front only":b!=null?"Back only":"Add card"));include.setTextSize(17);include.setTypeface(null,Typeface.BOLD);include.setChecked(selectedCards[id]);panel.addView(include);include.setOnCheckedChangeListener((button,checked)->{selectedCards[index]=checked;updateSheet();});
-      if(f!=null){ImageView image=new ImageView(this);image.setImageBitmap(previewBitmap(f));image.setAdjustViewBounds(true);image.setScaleType(ImageView.ScaleType.FIT_CENTER);LinearLayout.LayoutParams imageParams=new LinearLayout.LayoutParams(-1,220);panel.addView(image,imageParams);}
+      if(f!=null){ImageView image=new ImageView(this);image.setImageBitmap(previewBitmap(f));image.setAdjustViewBounds(true);image.setScaleType(ImageView.ScaleType.FIT_CENTER);LinearLayout.LayoutParams imageParams=new LinearLayout.LayoutParams(-1,320);panel.addView(image,imageParams);}
       addButton(panel,"✂  Front: "+(f==null?"select and crop":"edit crop"),()->cropSlot(index,true));
       if(b!=null){ImageView image=new ImageView(this);image.setImageBitmap(previewBitmap(b));image.setAdjustViewBounds(true);image.setScaleType(ImageView.ScaleType.FIT_CENTER);LinearLayout.LayoutParams imageParams=new LinearLayout.LayoutParams(-1,220);panel.addView(image,imageParams);}
       addButton(panel,"✂  Back: "+(b==null?"select and crop":"edit crop"),()->cropSlot(index,false));
@@ -280,9 +291,9 @@ public class MainActivity extends Activity {
       ImageView image=new ImageView(this);
       image.setImageBitmap(candidate);
       image.setScaleType(ImageView.ScaleType.FIT_CENTER);
-      content.addView(image,new LinearLayout.LayoutParams(-1,200));
+      content.addView(image,new LinearLayout.LayoutParams(-1,260));
       TextView prompt=new TextView(this);
-      prompt.setText("BACK image "+(position+1)+" of "+cards.size()+"\\n"+(detected==null?"Number could not be read. Select the correct card manually.":"No matching front number found. Select the correct card manually."));
+      prompt.setText("BACK image "+(position+1)+" of "+cards.size()+"\\nSelect which Card this BACK belongs to. The FRONT image shown below each button is for comparison only.");
       prompt.setTextSize(16);prompt.setTextColor(navy);prompt.setPadding(0,12,0,12);
       content.addView(prompt);
       android.app.AlertDialog dialog=new android.app.AlertDialog.Builder(this)
@@ -291,14 +302,15 @@ public class MainActivity extends Activity {
       for(int i=0;i<4;i++){
         final int target=i;
         Bitmap frontPreview=sideBitmap(i,true);
-        String label="Card "+(i+1)+(frontPreview==null?"  (no front yet)":"  (front added)");
+        String label="Add as BACK of Card "+(i+1);
         Button button=new Button(this);button.setText(label);styleAction(button,false);
         LinearLayout.LayoutParams params=new LinearLayout.LayoutParams(-1,-2);params.bottomMargin=8;
         content.addView(button,params);
         if(frontPreview!=null){
+          TextView frontLabel=new TextView(this);frontLabel.setText("FRONT of Card "+(i+1)+" (reference only)");frontLabel.setTextSize(13);frontLabel.setTextColor(navy);content.addView(frontLabel);
           ImageView small=new ImageView(this);small.setImageBitmap(previewBitmap(frontPreview));
           small.setScaleType(ImageView.ScaleType.FIT_CENTER);
-          content.addView(small,new LinearLayout.LayoutParams(-1,100));
+          content.addView(small,new LinearLayout.LayoutParams(-1,180));
         }
         button.setOnClickListener(v->{
           dialog.dismiss();
