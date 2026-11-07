@@ -46,20 +46,20 @@ public class MainActivity extends Activity {
   int copyCount=5;
   int verticalPosition=1; // 0 top, 1 center, 2 bottom
   static final int PICK_FRONT=101, PICK_BACK=102, SAVE=103, CROP_FRONT=104, CROP_BACK=105, CAMERA_FRONT=106, CAMERA_BACK=107, SAVE_JPG=108, PICK_DOCUMENT=109, CROP_SECOND_FRONT=110, CROP_SECOND_BACK=111;
-  int navy=Color.rgb(23,43,72),accent=Color.rgb(25,105,205);
+  int navy=Color.rgb(22,43,73),accent=Color.rgb(24,104,201);
   GradientDrawable rounded(int color,int radius){GradientDrawable d=new GradientDrawable();d.setColor(color);d.setCornerRadius(radius);return d;}
-  TextView section(String title){TextView t=new TextView(this);t.setText(title);t.setTextColor(navy);t.setTextSize(18);t.setTypeface(null,Typeface.BOLD);t.setPadding(4,18,4,8);return t;}
-  void styleAction(Button b,boolean primary){b.setAllCaps(false);b.setTextSize(16);b.setTypeface(null,Typeface.BOLD);b.setTextColor(primary?Color.WHITE:navy);b.setBackground(rounded(primary?accent:Color.rgb(226,236,249),22));b.setElevation(3);b.setPadding(14,13,14,13);}
+  TextView section(String title){TextView t=new TextView(this);t.setText(title);t.setTextColor(navy);t.setTextSize(18);t.setTypeface(null,Typeface.BOLD);t.setPadding(4,20,4,10);return t;}
+  void styleAction(Button b,boolean primary){b.setAllCaps(false);b.setTextSize(16);b.setTypeface(null,Typeface.BOLD);b.setTextColor(primary?Color.WHITE:navy);b.setBackground(rounded(primary?accent:Color.rgb(231,239,250),18));b.setElevation(2);b.setPadding(12,11,12,11);}
   @Override public void onCreate(Bundle b) {
     super.onCreate(b);
     try{cvReady=org.opencv.android.OpenCVLoader.initLocal();}catch(Throwable e){cvReady=false;}
-    LinearLayout root=new LinearLayout(this); root.setOrientation(1); root.setPadding(20,22,20,34);root.setBackgroundColor(Color.rgb(244,247,252));
+    LinearLayout root=new LinearLayout(this); root.setOrientation(1); root.setPadding(18,22,18,34);root.setBackgroundColor(Color.rgb(245,248,253));
     ScrollView scroll=new ScrollView(this); scroll.addView(root); setContentView(scroll);
-    TextView title=new TextView(this); title.setText("JB Mobile & PhotoState\nID Card A4 Printer"); title.setTextSize(24); title.setGravity(17); root.addView(title);
+    TextView title=new TextView(this); title.setText("Multiple ID Cards\nScan • Match • Print"); title.setTextSize(23);title.setTextColor(navy);title.setTypeface(null,Typeface.BOLD); title.setGravity(17);title.setPadding(0,0,0,18); root.addView(title);
     root.addView(section("1  Add ID cards"));
     addButton(root,"＋  Select FRONT document",()->showDocumentSources(true));
     addButton(root,"＋  Select BACK document",()->showDocumentSources(false));
-    TextView instruction=new TextView(this);instruction.setText("Add all fronts first, then add backs in the same order. Check each card below.");instruction.setTextColor(navy);instruction.setPadding(8,4,8,12);root.addView(instruction);
+    TextView instruction=new TextView(this);instruction.setText("Import the front sheet, then the back sheet. Review detected cards below.");instruction.setTextColor(navy);instruction.setPadding(8,4,8,12);root.addView(instruction);
     importedPreview=new ImageView(this);importedPreview.setAdjustViewBounds(true);importedPreview.setMaxHeight(300);root.addView(importedPreview);
     addButton(root,"Start new sheet / Clear all cards",()->{scanSerial++;selectedCards=new boolean[]{true,true,true,true};frontNumbers=new String[4];backNumbers=new String[4];front=null;back=null;originalFront=null;originalBack=null;extraFront=new Bitmap[4];extraBack=new Bitmap[4];cardFrontSources=new Uri[4];cardBackSources=new Uri[4];shownCards=1;sourceDocument=null;importedPreview.setImageDrawable(null);refresh();status.setText("New empty sheet. Add a photo or document.");});
     cardList=new LinearLayout(this);cardList.setOrientation(1);root.addView(cardList);
