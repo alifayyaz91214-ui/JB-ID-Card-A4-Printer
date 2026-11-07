@@ -320,14 +320,14 @@ public class PassportActivity extends Activity {
   }
   void printSheet(){
     PrintManager manager=(PrintManager)getSystemService(PRINT_SERVICE);
-    manager.print(a4?"JB Passport Photos A4":"JB Passport Photos 4R",new PrintDocumentAdapter(){
+    manager.print("JB Passport Photos "+paperName(),new PrintDocumentAdapter(){
       @Override public void onLayout(PrintAttributes oldA,PrintAttributes newA,android.os.CancellationSignal signal,LayoutResultCallback callback,Bundle extras){
-        callback.onLayoutFinished(new PrintDocumentInfo.Builder("JB-Passport-Photos-4R.pdf").setContentType(PrintDocumentInfo.CONTENT_TYPE_DOCUMENT).setPageCount(1).build(),true);
+        callback.onLayoutFinished(new PrintDocumentInfo.Builder("JB-Passport-Photos-"+paperName()+".pdf").setContentType(PrintDocumentInfo.CONTENT_TYPE_DOCUMENT).setPageCount(1).build(),true);
       }
       @Override public void onWrite(PageRange[] pages,ParcelFileDescriptor destination,android.os.CancellationSignal signal,WriteResultCallback callback){
         try(FileOutputStream out=new FileOutputStream(destination.getFileDescriptor())){PdfDocument doc=makePdf();doc.writeTo(out);doc.close();callback.onWriteFinished(new PageRange[]{PageRange.ALL_PAGES});}
         catch(Exception e){callback.onWriteFailed(e.getMessage());}
       }
-    },new PrintAttributes.Builder().setMediaSize(a4?PrintAttributes.MediaSize.ISO_A4:new PrintAttributes.MediaSize("JB_4R","4R 102 x 152 mm",4016,5984)).setColorMode(PrintAttributes.COLOR_MODE_COLOR).build());
+    },new PrintAttributes.Builder().setMediaSize(paperIndex==1?PrintAttributes.MediaSize.ISO_A4:paperIndex==2?new PrintAttributes.MediaSize("JB_5X7","5 x 7 inch",5000,7000):paperIndex==3?PrintAttributes.MediaSize.ISO_A5:new PrintAttributes.MediaSize("JB_4R","4R 102 x 152 mm",4000,6000)).setColorMode(PrintAttributes.COLOR_MODE_COLOR).build());
   }
 }
