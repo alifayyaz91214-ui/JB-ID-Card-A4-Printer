@@ -32,6 +32,7 @@ public class MainActivity extends Activity {
   ImageView importedPreview;
   int shownCards=1;
   int importPage=0;
+  int scanSerial=0;
   boolean[] selectedCards={true,true,true,true};
   TextView status;
   View sheetPreview;
@@ -56,7 +57,7 @@ public class MainActivity extends Activity {
     addButton(root,"+  Add photo or document",()->showImportChoices());
     TextView instruction=new TextView(this);instruction.setText("Choose Camera or Gallery. Then crop each card front and back.");instruction.setTextColor(navy);instruction.setPadding(8,4,8,12);root.addView(instruction);
     importedPreview=new ImageView(this);importedPreview.setAdjustViewBounds(true);importedPreview.setMaxHeight(240);root.addView(importedPreview);
-    addButton(root,"Start new sheet / Clear all cards",()->{selectedCards=new boolean[]{true,true,true,true};front=null;back=null;originalFront=null;originalBack=null;extraFront=new Bitmap[4];extraBack=new Bitmap[4];cardFrontSources=new Uri[4];cardBackSources=new Uri[4];shownCards=1;sourceDocument=null;importedPreview.setImageDrawable(null);refresh();status.setText("New empty sheet. Add a photo or document.");});
+    addButton(root,"Start new sheet / Clear all cards",()->{scanSerial++;selectedCards=new boolean[]{true,true,true,true};front=null;back=null;originalFront=null;originalBack=null;extraFront=new Bitmap[4];extraBack=new Bitmap[4];cardFrontSources=new Uri[4];cardBackSources=new Uri[4];shownCards=1;sourceDocument=null;importedPreview.setImageDrawable(null);refresh();status.setText("New empty sheet. Add a photo or document.");});
     cardList=new LinearLayout(this);cardList.setOrientation(1);root.addView(cardList);
     frontView=new ImageView(this);backView=new ImageView(this);
     frontView.setAdjustViewBounds(true);backView.setAdjustViewBounds(true);
@@ -142,7 +143,7 @@ public class MainActivity extends Activity {
         runOnUiThread(()->{if(isFinishing()||isDestroyed())return;if(failure!=null){status.setText("Camera image error: "+failure);return;}sourceDocument=Uri.fromFile(new File(path));importedPreview.setImageBitmap(source);scanDocument(source,sourceDocument);});
       }).start();return;
     }
-    if(request==PICK_DOCUMENT){sourceDocument=data.getData();try{String mime=getContentResolver().getType(sourceDocument);if("application/pdf".equals(mime)){android.graphics.pdf.PdfRenderer renderer=new android.graphics.pdf.PdfRenderer(getContentResolver().openFileDescriptor(sourceDocument,"r"));android.graphics.pdf.PdfRenderer.Page page=renderer.openPage(0);float scale=Math.min(2.5f,2200f/Math.max(page.getWidth(),page.getHeight()));Bitmap image=Bitmap.createBitmap(Math.max(1,(int)(page.getWidth()*scale)),Math.max(1,(int)(page.getHeight()*scale)),Bitmap.Config.ARGB_8888);image.eraseColor(Color.WHITE);page.render(image,null,null,android.graphics.pdf.PdfRenderer.Page.RENDER_MODE_FOR_DISPLAY);page.close();renderer.close();File file=new File(getCacheDir(),"jb-imported-document.png");try(FileOutputStream out=new FileOutputStream(file)){image.compress(Bitmap.CompressFormat.PNG,100,out);}sourceDocument=Uri.fromFile(file);status.setText("PDF page 1 loaded. Choose card count and crop each side.");}else{status.setText("Image loaded. Choose card count and crop each side.");}}catch(Exception e){status.setText("Document import failed: "+e.getMessage());return;}try{BitmapFactory.Options options=new BitmapFactory.Options();options.inSampleSize=4;Bitmap thumb=BitmapFactory.decodeStream(getContentResolver().openInputStream(sourceDocument),null,options);importedPreview.setImageBitmap(thumb);}catch(Exception ignored){}try{BitmapFactory.Options opts=new BitmapFactory.Options();opts.inJustDecodeBounds=true;try(InputStream in=getContentResolver().openInputStream(sourceDocument)){BitmapFactory.decodeStream(in,null,opts);}opts.inSampleSize=1;while(Math.max(opts.outWidth/opts.inSampleSize,opts.outHeight/opts.inSampleSize)>2200)opts.inSampleSize*=2;opts.inJustDecodeBounds=false;Bitmap original;try(InputStream in=getContentResolver().openInputStream(sourceDocument)){original=BitmapFactory.decodeStream(in,null,opts);}scanDocument(original,sourceDocument);}catch(Exception e){status.setText("Scan failed: "+e.getMessage());}return;}
+    if(request==PICK_DOCUMENT){sourceDocument=data.getData();try{String mime=getContentResolver().getType(sourceDocument);if("application/pdf".equals(mime)){android.graphics.pdf.PdfRenderer renderer=new android.graphics.pdf.PdfRenderer(getContentResolver().openFileDescriptor(sourceDocument,"r"));android.graphics.pdf.PdfRenderer.Page page=renderer.openPage(0);float scale=Math.min(5f,3508f/Math.max(page.getWidth(),page.getHeight()));Bitmap image=Bitmap.createBitmap(Math.max(1,(int)(page.getWidth()*scale)),Math.max(1,(int)(page.getHeight()*scale)),Bitmap.Config.ARGB_8888);image.eraseColor(Color.WHITE);page.render(image,null,null,android.graphics.pdf.PdfRenderer.Page.RENDER_MODE_FOR_DISPLAY);page.close();renderer.close();File file=new File(getCacheDir(),"jb-imported-document.png");try(FileOutputStream out=new FileOutputStream(file)){image.compress(Bitmap.CompressFormat.PNG,100,out);}sourceDocument=Uri.fromFile(file);status.setText("PDF page 1 loaded. Choose card count and crop each side.");}else{status.setText("Image loaded. Choose card count and crop each side.");}}catch(Exception e){status.setText("Document import failed: "+e.getMessage());return;}try{BitmapFactory.Options options=new BitmapFactory.Options();options.inSampleSize=4;Bitmap thumb=BitmapFactory.decodeStream(getContentResolver().openInputStream(sourceDocument),null,options);importedPreview.setImageBitmap(thumb);}catch(Exception ignored){}try{BitmapFactory.Options opts=new BitmapFactory.Options();opts.inJustDecodeBounds=true;try(InputStream in=getContentResolver().openInputStream(sourceDocument)){BitmapFactory.decodeStream(in,null,opts);}opts.inSampleSize=1;while(Math.max(opts.outWidth/opts.inSampleSize,opts.outHeight/opts.inSampleSize)>3600)opts.inSampleSize*=2;opts.inJustDecodeBounds=false;Bitmap original;try(InputStream in=getContentResolver().openInputStream(sourceDocument)){original=BitmapFactory.decodeStream(in,null,opts);}scanDocument(original,sourceDocument);}catch(Exception e){status.setText("Scan failed: "+e.getMessage());}return;}
     if(request==CROP_FRONT||request==CROP_BACK||request==CROP_SECOND_FRONT||request==CROP_SECOND_BACK){try{String path=data.getStringExtra("cropPath");Bitmap bmp=BitmapFactory.decodeFile(path);if(bmp==null)throw new IOException("Cropped image unavailable");int id=pendingCropCard;boolean isFront=pendingCropFront;if(id==0){if(isFront)front=bmp;else back=bmp;}else{if(isFront)extraFront[id]=bmp;else extraBack[id]=bmp;}if(isFront)cardFrontSources[id]=sourceDocument;else cardBackSources[id]=sourceDocument;shownCards=Math.max(shownCards,id+1);refresh();status.setText("Selected card crop saved.");}catch(Exception e){status.setText("Crop error: "+e.getMessage());}return;}
     if(request==SAVE_JPG){try{JpgExport.save(this,data.getData(),2480,3508,c->{c.scale(2480f/595f,3508f/842f);drawSheet(c);});status.setText("A4 JPG saved at 300 DPI.");}catch(Exception e){status.setText("JPG save failed: "+e.getMessage());}return;}
     if(request==SAVE){try(OutputStream out=getContentResolver().openOutputStream(data.getData())){PdfDocument pdf=makePdf();pdf.writeTo(out);pdf.close();status.setText("PDF saved successfully.");}catch(Exception e){status.setText("PDF error: "+e.getMessage());}return;}
@@ -197,31 +198,51 @@ public class MainActivity extends Activity {
       }
     }
   }
+  Bitmap sideBitmap(int id,boolean isFront){return id==0?(isFront?front:back):(isFront?extraFront[id]:extraBack[id]);}
+  void assignSide(int id,boolean isFront,Bitmap bitmap,Uri uri){
+    if(id==0){if(isFront)front=bitmap;else back=bitmap;}
+    else{if(isFront)extraFront[id]=bitmap;else extraBack[id]=bitmap;}
+    if(isFront)cardFrontSources[id]=uri;else cardBackSources[id]=uri;
+    selectedCards[id]=true;shownCards=Math.max(shownCards,id+1);
+  }
+  void assignDetected(java.util.List<Bitmap> found,Uri uri,int position){
+    if(position>=found.size()){refresh();status.setText("Cards arranged. Review Front / Back, copies and A4 preview.");return;}
+    Bitmap candidate=found.get(position);
+    LinearLayout layout=new LinearLayout(this);layout.setOrientation(1);layout.setPadding(24,12,24,0);
+    ImageView preview=new ImageView(this);preview.setImageBitmap(candidate);preview.setAdjustViewBounds(true);preview.setMaxHeight(230);layout.addView(preview);
+    TextView note=new TextView(this);note.setText("Detected image "+(position+1)+" of "+found.size()+". Select its correct card and side.");note.setPadding(4,10,4,10);layout.addView(note);
+    String[] labels={"Card 1 - Front","Card 1 - Back","Card 2 - Front","Card 2 - Back","Card 3 - Front","Card 3 - Back","Card 4 - Front","Card 4 - Back"};
+    new android.app.AlertDialog.Builder(this).setTitle("Which card side is this?").setView(layout)
+      .setItems(labels,(dialog,which)->{
+        int id=which/2;boolean isFront=which%2==0;
+        Bitmap previous=sideBitmap(id,isFront);
+        if(previous!=null){
+          new android.app.AlertDialog.Builder(this).setTitle("Replace existing side?")
+            .setMessage("Card "+(id+1)+" already has a "+(isFront?"Front":"Back")+".")
+            .setPositiveButton("Replace",(d,w)->{assignSide(id,isFront,candidate,uri);refresh();assignDetected(found,uri,position+1);})
+            .setNegativeButton("Choose again",(d,w)->assignDetected(found,uri,position)).show();
+        }else{assignSide(id,isFront,candidate,uri);refresh();assignDetected(found,uri,position+1);}
+      }).setNegativeButton("Skip image",(dialog,which)->assignDetected(found,uri,position+1))
+      .setCancelable(false).show();
+  }
   void scanDocument(Bitmap image,Uri uri){
     if(image==null){status.setText("Could not read photo.");return;}
+    final int serial=++scanSerial;
     status.setText("Finding ID cards automatically...");
     new Thread(()->{
       java.util.List<Bitmap> found=new java.util.ArrayList<>();
       String error=null;
-      try{if(cvReady)found=CardDetector.detectAll(image,4);}catch(Exception e){error=e.getMessage();}
+      try{if(cvReady)found=CardDetector.detectAll(image,8);}catch(Exception e){error=e.getMessage();}
       final java.util.List<Bitmap> cards=found;final String problem=error;
       runOnUiThread(()->{
-        if(isFinishing()||isDestroyed())return;
+        if(serial!=scanSerial||isFinishing()||isDestroyed())return;
         if(cards.isEmpty()){
           shownCards=Math.max(shownCards,1);renderCardList();
-          status.setText("No reliable card edges found. Tap Front or Back crop to select manually."+(problem==null?"":" "+problem));
+          status.setText("No reliable card edges found. Use Front / Back manual crop."+(problem==null?"":" "+problem));
           return;
         }
-        int added=0;
-        for(Bitmap card:cards){
-          int slot=-1;
-          for(int id=0;id<4;id++)if((id==0?front:extraFront[id])==null&&(id==0?back:extraBack[id])==null){slot=id;break;}
-          if(slot<0)break;
-          if(slot==0)front=card;else extraFront[slot]=card;
-          cardFrontSources[slot]=uri;selectedCards[slot]=true;shownCards=Math.max(shownCards,slot+1);added++;
-        }
-        refresh();
-        status.setText(added+" card(s) detected. Each is a separate card, Front by default. Change to Back or edit crop if needed.");
+        status.setText(cards.size()+" card side(s) found. Assign each image to its correct Front / Back.");
+        assignDetected(cards,uri,0);
       });
     }).start();
   }
