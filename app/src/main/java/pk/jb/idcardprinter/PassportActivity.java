@@ -18,6 +18,7 @@ public class PassportActivity extends Activity {
   RectF cropArea=null; // normalized crop coordinates, shared by preview and PDF
   Button cropButton;
   int photoCount=6;
+  boolean autoFill=true;
   int sizeIndex=0;
   boolean a4=false;
   int paperIndex=0; // 0=4R, 1=A4, 2=5x7, 3=A5
@@ -57,26 +58,39 @@ public class PassportActivity extends Activity {
     preview=new ImageView(this);preview.setAdjustViewBounds(true);preview.setMinimumHeight(200);root.addView(preview);
     cropButton=new Button(this);cropButton.setText("CROP & POSITION PHOTO (EXACT SELECTED SIZE)");root.addView(cropButton);
     cropButton.setOnClickListener(v->showCropEditor());
-    TextView note=new TextView(this);note.setText("Choose 1, 2, 4 or 6 portraits (35 x 45 mm each), with white cutting gaps and thin borders. Use a front-facing, properly lit photo with a plain background. Choose the country size, then use Crop & Position to adjust headroom and framing. Printed dimensions stay exact.");root.addView(note);
+    TextView note=new TextView(this);note.setText("The sheet automatically fills with as many photos as fit at the selected physical size. Uncheck Auto-fill by entering an exact count. Check face position and crop before printing.");root.addView(note);
     TextView sizeLabel=new TextView(this);sizeLabel.setText("Photo size preset (confirm official application rules)");root.addView(sizeLabel);
     Spinner sizes=new Spinner(this);ArrayAdapter<String> sizeAdapter=new ArrayAdapter<>(this,android.R.layout.simple_spinner_dropdown_item,sizeNames);sizes.setAdapter(sizeAdapter);
     sizes.setOnItemSelectedListener(new android.widget.AdapterView.OnItemSelectedListener(){
       public void onItemSelected(android.widget.AdapterView<?> parent,View view,int position,long id){sizeIndex=position;cropArea=null;updateSheet();}
       public void onNothingSelected(android.widget.AdapterView<?> parent){}
     });root.addView(sizes);
-    TextView countLabel=new TextView(this);countLabel.setText("Photo copies on selected sheet");countLabel.setTextSize(17);root.addView(countLabel);
-    RadioGroup countGroup=new RadioGroup(this);countGroup.setOrientation(RadioGroup.HORIZONTAL);
-    int[] counts={1,2,3,4,6,8,12,16,20};
-    for(int count:counts){RadioButton rb=new RadioButton(this);rb.setText(""+count);rb.setId(500+count);countGroup.addView(rb);}
-    countGroup.check(506);countGroup.setOnCheckedChangeListener((g,id)->{photoCount=id-500;updateSheet();});root.addView(countGroup);
-    TextView customLabel=new TextView(this);customLabel.setText("Exact number of photos (1 to sheet capacity)");root.addView(customLabel);
-    EditText customCount=new EditText(this);customCount.setInputType(android.text.InputType.TYPE_CLASS_NUMBER);customCount.setHint("Example: 12 or 20");root.addView(customCount);
+    CheckBox autoCount=new CheckBox(this);
+    autoCount.setText("Auto-fill sheet with maximum photos");
+    autoCount.setChecked(true);root.addView(autoCount);
+    autoCount.setOnCheckedChangeListener((button,checked)->{
+      autoFill=checked;
+      if(checked)photoCount=maximumCopies();
+      updateSheet();
+    });
+    TextView customLabel=new TextView(this);
+    customLabel.setText("Or choose exact number of photos (e.g. 2, 3, 4)");
+    root.addView(customLabel);
+    EditText customCount=new EditText(this);
+    customCount.setInputType(android.text.InputType.TYPE_CLASS_NUMBER);
+    customCount.setSingleLine(true);customCount.setHint("Enter photo count");
+    root.addView(customCount);
     customCount.addTextChangedListener(new android.text.TextWatcher(){
       public void beforeTextChanged(CharSequence t,int start,int count,int after){}
       public void onTextChanged(CharSequence t,int start,int before,int count){
         if(t.length()==0)return;
-        try{photoCount=Math.min(100,Math.max(1,Integer.parseInt(t.toString())));countGroup.clearCheck();updateSheet();}
-        catch(NumberFormatException ignored){}
+        try{
+          int requested=Integer.parseInt(t.toString());
+          if(requested<1)return;
+          autoFill=false;
+          autoCount.setChecked(false);
+          photoCount=requested;updateSheet();
+        }catch(NumberFormatException ignored){}
       }
       public void afterTextChanged(android.text.Editable e){}
     });
@@ -119,7 +133,7 @@ public class PassportActivity extends Activity {
       public void onNothingSelected(android.widget.AdapterView<?> parent){}
     });root.addView(bg);
     TextView editNote=new TextView(this);editNote.setText("Background replacement uses corner-color matching, not AI person segmentation. Review hair edges and official photo rules. Clothes change requires a separate AI model and is not available yet.");root.addView(editNote);
-    TextView fitting=new TextView(this);fitting.setText("Preview shows only the chosen copies, with exact photo dimensions and cutting gaps. No extra photos will be added.");root.addView(fitting);
+    TextView fitting=new TextView(this);fitting.setText("Auto-fill places the maximum photos that fit; entering a number prints only that many. All sizes use physical millimeter dimensions and cutting gaps.");root.addView(fitting);
     Button jpg=new Button(this);jpg.setText("Save selected sheet as JPG");root.addView(jpg);jpg.setOnClickListener(v->{if(ready())JpgExport.choose(this,SAVE_JPG,"JB-Passport-Photos-"+paperName()+".jpg");});
     Button pdf=new Button(this);pdf.setText("Save selected sheet as PDF");root.addView(pdf);
     pdf.setOnClickListener(v->{if(!ready())return;Intent i=new Intent(Intent.ACTION_CREATE_DOCUMENT);i.setType("application/pdf");i.addCategory(Intent.CATEGORY_OPENABLE);i.putExtra(Intent.EXTRA_TITLE,"JB-Passport-Photos-"+paperName()+".pdf");startActivityForResult(i,SAVE);});
@@ -218,7 +232,13 @@ public class PassportActivity extends Activity {
     new Canvas(output).drawBitmap(edited,0,0,finishingPaint());
     preview.setImageBitmap(output);previewEdited=edited;updateSheet();
   }
-  void updateSheet(){if(sheetPreview!=null)sheetPreview.invalidate();if(capacityLabel!=null)capacityLabel.setText("Maximum "+maximumCopies()+" photos on "+paperName()+" at "+(int)widths[sizeIndex]+" x "+(int)heights[sizeIndex]+" mm • Selected: "+photoCount+(photoCount>maximumCopies()?" (too many)":""));}
+  void updateSheet(){
+    if(autoFill)photoCount=maximumCopies();
+    if(sheetPreview!=null)sheetPreview.invalidate();
+    if(capacityLabel!=null)capacityLabel.setText(
+      "Fits "+maximumCopies()+" photos on "+paperName()+" at "+(int)widths[sizeIndex]+" x "+(int)heights[sizeIndex]+" mm"
+      +" • Printing: "+photoCount+(photoCount>maximumCopies()?" (too many for this sheet)":""));
+  }
   // PDF points at 72 dpi: 4R portrait = 102 x 152 mm; photo = 35 x 45 mm.
   PdfDocument makePdf(){
     int pageW=paperWidth(),pageH=paperHeight();
