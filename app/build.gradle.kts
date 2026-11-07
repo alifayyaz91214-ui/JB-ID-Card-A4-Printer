@@ -5,4 +5,4 @@ android {
  defaultConfig { applicationId = "pk.jb.idcardprinter"; minSdk = 24; targetSdk = 28; versionCode = 2; versionName = "1.1" }
 }
 
-dependencies { implementation("org.opencv:opencv:4.10.0") }
+dependencies { implementation("org.opencv:opencv:4.10.0"); implementation("com.google.mlkit:text-recognition:16.0.1") }
