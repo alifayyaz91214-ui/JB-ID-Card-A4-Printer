@@ -13,8 +13,8 @@ import android.view.Gravity;
 import android.widget.*;
 
 public class HomeActivity extends Activity {
-  int navy=Color.rgb(21,38,65),blue=Color.rgb(32,104,218);
-  GradientDrawable shape(int color){GradientDrawable d=new GradientDrawable();d.setColor(color);d.setCornerRadius(28);return d;}
+  int navy=Color.rgb(20,40,70),blue=Color.rgb(25,103,205);
+  GradientDrawable shape(int color){GradientDrawable d=new GradientDrawable();d.setColor(color);d.setCornerRadius(26);return d;}
   TextView text(String value,int size,boolean bold,int color){
     TextView t=new TextView(this);t.setText(value);t.setTextSize(size);t.setTextColor(color);if(bold)t.setTypeface(null,Typeface.BOLD);return t;
   }
@@ -83,23 +83,23 @@ public class HomeActivity extends Activity {
     }
   }
   void service(LinearLayout root,String symbol,String title,String desc,Class<?> destination){
-    LinearLayout box=new LinearLayout(this);box.setOrientation(LinearLayout.VERTICAL);box.setPadding(20,20,20,20);box.setBackground(shape(Color.WHITE));
-    LinearLayout.LayoutParams lp=new LinearLayout.LayoutParams(-1,-2);lp.bottomMargin=22;root.addView(box,lp);
+    LinearLayout box=new LinearLayout(this);box.setOrientation(LinearLayout.VERTICAL);box.setPadding(20,20,20,20);box.setBackground(shape(Color.WHITE));box.setElevation(5);
+    LinearLayout.LayoutParams lp=new LinearLayout.LayoutParams(-1,-2);lp.bottomMargin=18;root.addView(box,lp);
     ServiceArt illustration=new ServiceArt(destination==MainActivity.class||destination==SingleCardActivity.class);
-    LinearLayout.LayoutParams artLp=new LinearLayout.LayoutParams(-1,210);artLp.bottomMargin=14;box.addView(illustration,artLp);
+    LinearLayout.LayoutParams artLp=new LinearLayout.LayoutParams(-1,160);artLp.bottomMargin=14;box.addView(illustration,artLp);
     TextView heading=text(symbol+"   "+title,20,true,navy);box.addView(heading);
     TextView detail=text(desc,14,false,Color.rgb(92,108,130));detail.setPadding(0,12,0,18);box.addView(detail);
-    Button open=new Button(this);open.setText("Open  →");open.setAllCaps(false);open.setTextSize(17);open.setTypeface(null,Typeface.BOLD);open.setPadding(12,14,12,14);open.setTextColor(Color.WHITE);open.setBackground(shape(blue));box.addView(open);
+    Button open=new Button(this);open.setText("Continue  →");open.setAllCaps(false);open.setTextSize(17);open.setTypeface(null,Typeface.BOLD);open.setPadding(12,14,12,14);open.setTextColor(Color.WHITE);open.setBackground(shape(blue));box.addView(open);
     open.setOnClickListener(v->startActivity(new Intent(this,destination)));
   }
   @Override public void onCreate(Bundle b){
     super.onCreate(b);
     ScrollView scroll=new ScrollView(this);scroll.setFillViewport(true);
-    LinearLayout root=new LinearLayout(this);root.setOrientation(1);root.setPadding(20,26,20,36);root.setBackgroundColor(Color.rgb(244,247,252));scroll.addView(root);
+    LinearLayout root=new LinearLayout(this);root.setOrientation(1);root.setPadding(18,24,18,34);root.setBackgroundColor(Color.rgb(245,248,253));scroll.addView(root);
     BrandBanner banner=new BrandBanner();
     LinearLayout.LayoutParams bannerLp=new LinearLayout.LayoutParams(-1,125);bannerLp.bottomMargin=14;root.addView(banner,bannerLp);
-    TextView title=text("Choose a service",27,true,navy);title.setPadding(0,4,0,8);root.addView(title);
-    TextView sub=text("Tap a service to get started. Simple, offline and ready to print.",15,false,Color.rgb(92,108,130));sub.setPadding(0,0,0,20);root.addView(sub);
+    TextView title=text("Your print studio",27,true,navy);title.setPadding(0,4,0,8);root.addView(title);
+    TextView sub=text("Select a service below to scan, edit and print.",15,false,Color.rgb(92,108,130));sub.setPadding(0,0,0,20);root.addView(sub);
     service(root,"01","Single ID Card Printer","One ID card: Front + Back, crop and print on A4.",SingleCardActivity.class);
     service(root,"02","Multiple ID Card Printer","Two to four ID cards: auto-detect, crop and mix copies on A4.",MainActivity.class);
     service(root,"03","Passport Photo Studio","Make passport photos in the correct size.",PassportActivity.class);
