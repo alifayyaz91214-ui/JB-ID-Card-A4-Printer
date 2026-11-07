@@ -82,6 +82,35 @@ public class CropActivity extends Activity {
       float w=bitmap.getWidth(),h=bitmap.getHeight();
       points=new float[]{w*.08f,h*.08f,w*.92f,h*.08f,w*.92f,h*.92f,w*.08f,h*.92f};invalidate();
     }
+    boolean selectCardAt(float x,float y){
+      if(bitmap==null)return false;
+      // Detect the tapped card in a local image region, rather than always using
+      // the first card in the whole scanned sheet.
+      int w=bitmap.getWidth(),h=bitmap.getHeight();
+      int regionW=Math.min(w,Math.max(240,(int)(w*.78f)));
+      int regionH=Math.min(h,Math.max(180,(int)(h*.40f)));
+      int left=Math.max(0,Math.min(w-regionW,Math.round(x-regionW/2f)));
+      int top=Math.max(0,Math.min(h-regionH,Math.round(y-regionH/2f)));
+      Bitmap region=null;
+      try{
+        region=Bitmap.createBitmap(bitmap,left,top,regionW,regionH);
+        org.opencv.core.Point[] corners=CardDetector.findCorners(region);
+        if(corners==null)return false;
+        float[] candidate=new float[8];
+        for(int k=0;k<4;k++){candidate[k*2]=(float)corners[k].x+left;candidate[k*2+1]=(float)corners[k].y+top;}
+        Path shape=new Path();shape.moveTo(candidate[0],candidate[1]);
+        for(int k=1;k<4;k++)shape.lineTo(candidate[2*k],candidate[2*k+1]);shape.close();
+        android.graphics.Region hit=new android.graphics.Region();
+        android.graphics.RectF bounds=new android.graphics.RectF();shape.computeBounds(bounds,true);
+        hit.setPath(shape,new android.graphics.Region((int)bounds.left-2,(int)bounds.top-2,(int)bounds.right+2,(int)bounds.bottom+2));
+        if(!hit.contains(Math.round(x),Math.round(y)))return false;
+        points=candidate;selected=0;active=-1;
+        selectedLabel.setText("Selected corner: Top Left • tap another card to switch");
+        help.setText("Card selected. Adjust corners if needed, then Crop & Save. Tap another card to switch.");
+        invalidate();return true;
+      }catch(Throwable ignored){return false;}
+      finally{if(region!=null&&!region.isRecycled())region.recycle();}
+    }
     void nudge(int dx,int dy){
       if(bitmap==null)return;
       float step=2f/Math.max(.05f,scale);
@@ -107,6 +136,13 @@ public class CropActivity extends Activity {
       if(e.getAction()==MotionEvent.ACTION_DOWN){
         float best=Float.MAX_VALUE;active=-1;
         for(int i=0;i<4;i++){float d=(x-points[2*i])*(x-points[2*i])+(y-points[2*i+1])*(y-points[2*i+1]);if(d<best){best=d;active=i;}}
+        // A tap well away from corner handles selects another card in this scan.
+        float nearestPixels=(float)Math.sqrt(best)*scale;
+        if(nearestPixels>38f){
+          if(selectCardAt(x,y))return true;
+          // If no card was found, leave the existing corners unchanged.
+          active=-1;return true;
+        }
         selected=active;
         // Maintain a finger-to-corner offset: the thumb can stay away from the exact edge.
         touchOffsetX=points[2*active]-x;touchOffsetY=points[2*active+1]-y;
