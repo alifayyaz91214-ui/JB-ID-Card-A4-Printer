@@ -270,25 +270,53 @@ public class MainActivity extends Activity {
         matchScannedSides(cards,uri,frontSide,position+1,serial,matched+1,review);
         return;
       }
-      // Never silently pair a back to a front based only on scan order.
+      // Show an explicit, scrollable selection with large buttons. Never silently guess a pair.
       final String detected=number;
-      String[] choices={"Card 1","Card 2","Card 3","Card 4","Skip this image"};
-      new android.app.AlertDialog.Builder(this)
-        .setTitle(number==null?"CNIC number not readable":"CNIC number not matched")
-        .setMessage("Image "+(position+1)+" of "+cards.size()+". Choose the correct "+(frontSide?"FRONT":"BACK")+" card. OCR: "+(number==null?"unavailable":"••••"+number.substring(9)))
-        .setItems(choices,(dialog,which)->{
-          if(which==4){matchScannedSides(cards,uri,frontSide,position+1,serial,matched,review+1);return;}
-          if(sideBitmap(which,frontSide)!=null){
-            new android.app.AlertDialog.Builder(this).setTitle("Replace existing side?")
-              .setMessage("Card "+(which+1)+" already has this side. Replace it?")
-              .setPositiveButton("Replace",(d,w)->{assignSide(which,frontSide,candidate,uri);if(frontSide)frontNumbers[which]=detected;else backNumbers[which]=detected;matchScannedSides(cards,uri,frontSide,position+1,serial,matched,review+1);})
+      android.widget.ScrollView scroll=new android.widget.ScrollView(this);
+      LinearLayout content=new LinearLayout(this);
+      content.setOrientation(LinearLayout.VERTICAL);
+      content.setPadding(22,12,22,12);
+      scroll.addView(content);
+      ImageView image=new ImageView(this);
+      image.setImageBitmap(candidate);
+      image.setScaleType(ImageView.ScaleType.FIT_CENTER);
+      content.addView(image,new LinearLayout.LayoutParams(-1,200));
+      TextView prompt=new TextView(this);
+      prompt.setText("BACK image "+(position+1)+" of "+cards.size()+"\\n"+(detected==null?"Number could not be read. Select the correct card manually.":"No matching front number found. Select the correct card manually."));
+      prompt.setTextSize(16);prompt.setTextColor(navy);prompt.setPadding(0,12,0,12);
+      content.addView(prompt);
+      android.app.AlertDialog dialog=new android.app.AlertDialog.Builder(this)
+        .setTitle("Choose this BACK belongs to")
+        .setView(scroll).setCancelable(false).create();
+      for(int i=0;i<4;i++){
+        final int target=i;
+        Bitmap frontPreview=sideBitmap(i,true);
+        String label="Card "+(i+1)+(frontPreview==null?"  (no front yet)":"  (front added)");
+        Button button=new Button(this);button.setText(label);styleAction(button,false);
+        LinearLayout.LayoutParams params=new LinearLayout.LayoutParams(-1,-2);params.bottomMargin=8;
+        content.addView(button,params);
+        if(frontPreview!=null){
+          ImageView small=new ImageView(this);small.setImageBitmap(previewBitmap(frontPreview));
+          small.setScaleType(ImageView.ScaleType.FIT_CENTER);
+          content.addView(small,new LinearLayout.LayoutParams(-1,100));
+        }
+        button.setOnClickListener(v->{
+          dialog.dismiss();
+          if(sideBitmap(target,frontSide)!=null){
+            new android.app.AlertDialog.Builder(this).setTitle("Replace existing BACK?")
+              .setMessage("Card "+(target+1)+" already has a back image.")
+              .setPositiveButton("Replace",(d,w)->{assignSide(target,frontSide,candidate,uri);backNumbers[target]=detected;refresh();matchScannedSides(cards,uri,frontSide,position+1,serial,matched,review+1);})
               .setNegativeButton("Choose again",(d,w)->matchScannedSides(cards,uri,frontSide,position,serial,matched,review)).show();
           }else{
-            assignSide(which,frontSide,candidate,uri);
-            if(frontSide)frontNumbers[which]=detected;else backNumbers[which]=detected;
+            assignSide(target,frontSide,candidate,uri);backNumbers[target]=detected;refresh();
             matchScannedSides(cards,uri,frontSide,position+1,serial,matched,review+1);
           }
-        }).setCancelable(false).show();
+        });
+      }
+      Button skip=new Button(this);skip.setText("Skip this image");styleAction(skip,false);
+      content.addView(skip);
+      skip.setOnClickListener(v->{dialog.dismiss();matchScannedSides(cards,uri,frontSide,position+1,serial,matched,review+1);});
+      dialog.show();
     });
   }
   void scanDocument(Bitmap image,Uri uri){
