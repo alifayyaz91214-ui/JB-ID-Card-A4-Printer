@@ -52,6 +52,9 @@ public class SingleCardActivity extends Activity {
     frontView.setAdjustViewBounds(true); backView.setAdjustViewBounds(true);
     frontView.setMinimumHeight(90); backView.setMinimumHeight(90);frontView.setMaxHeight(170);backView.setMaxHeight(170);
     root.addView(section("1  Front of ID card"));
+    addButton(root,"Scan with Epson Smart Panel",()->openEpsonScanner());
+    addButton(root,"Import Scanned FRONT",()->pick(PICK_FRONT));
+    addButton(root,"Import Scanned BACK",()->pick(PICK_BACK));
     addButton(root,"📷  Capture front",()->openCamera(CAMERA_FRONT));
     addButton(root,"Choose existing front photo",()->pick(PICK_FRONT)); root.addView(frontView);
     addButton(root,"✂  Front manual crop",()->openCrop(frontUri,CROP_FRONT));
@@ -107,6 +110,18 @@ public class SingleCardActivity extends Activity {
   void addButton(LinearLayout root,String name,Runnable action){Button b=new Button(this);b.setText(name);styleAction(b,name.contains("Capture")||name.contains("Print A4"));LinearLayout.LayoutParams lp=new LinearLayout.LayoutParams(-1,-2);lp.bottomMargin=10;root.addView(b,lp);b.setOnClickListener(v->action.run());}
   void openCrop(Uri uri,int code){if(uri==null){status.setText("Select the photo first.");return;}Intent i=new Intent(this,CropActivity.class);i.setData(uri);startActivityForResult(i,code);}
   void openCamera(int code){Intent i=new Intent(this,CardCameraActivity.class);startActivityForResult(i,code);}
+  void openEpsonScanner(){
+    Intent launch=getPackageManager().getLaunchIntentForPackage("com.epson.epsonsmart");
+    if(launch==null)launch=getPackageManager().getLaunchIntentForPackage("com.epson.epsonsmartpanel");
+    if(launch!=null){
+      try{startActivity(launch);status.setText("Scan in Epson Smart Panel, save the image, return here and tap Import Scanned Image.");return;}
+      catch(Exception ignored){}
+    }
+    new android.app.AlertDialog.Builder(this).setTitle("Epson Smart Panel")
+      .setMessage("Open Epson Smart Panel to scan and save a JPG. Then return to JB and import the saved scan. If Smart Panel is not installed, install it first.")
+      .setPositiveButton("Open app settings",(d,w)->{try{startActivity(new Intent(Intent.ACTION_VIEW,Uri.parse("market://search?q=Epson Smart Panel")));}catch(Exception e){status.setText("Open Epson Smart Panel manually.");}})
+      .setNegativeButton("Cancel",null).show();
+  }
   void pick(int code){Intent i=new Intent(Intent.ACTION_GET_CONTENT);i.setType("image/*");startActivityForResult(i,code);}
   @Override protected void onActivityResult(int request,int result,Intent data){
     super.onActivityResult(request,result,data);
