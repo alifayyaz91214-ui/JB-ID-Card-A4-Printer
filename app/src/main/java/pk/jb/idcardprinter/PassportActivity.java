@@ -33,6 +33,14 @@ public class PassportActivity extends Activity {
   TextView status;
   View sheetPreview;
   Bitmap previewEdited;
+  void polishButton(Button b,boolean primary){
+    b.setAllCaps(false);b.setTextSize(15);b.setTypeface(null,Typeface.BOLD);
+    b.setTextColor(primary?Color.WHITE:Color.rgb(22,43,73));
+    android.graphics.drawable.GradientDrawable bg=new android.graphics.drawable.GradientDrawable();
+    bg.setColor(primary?Color.rgb(24,104,201):Color.rgb(231,239,250));
+    bg.setCornerRadius(20);b.setBackground(bg);b.setElevation(2);
+    b.setPadding(14,14,14,14);
+  }
   @Override public void onCreate(Bundle b){
     super.onCreate(b);
     LinearLayout root=new LinearLayout(this);root.setOrientation(1);root.setPadding(20,24,20,36);root.setBackgroundColor(Color.rgb(245,248,253));
@@ -51,12 +59,12 @@ public class PassportActivity extends Activity {
       }
     };
     LinearLayout.LayoutParams previewParams=new LinearLayout.LayoutParams(-1,380);previewParams.bottomMargin=14;root.addView(sheetPreview,previewParams);
-    Button pick=new Button(this);pick.setText("Select portrait from gallery");root.addView(pick);
+    Button pick=new Button(this);pick.setText("Select portrait from gallery");polishButton(pick,false);root.addView(pick);
     pick.setOnClickListener(v->{Intent i=new Intent(Intent.ACTION_GET_CONTENT);i.setType("image/*");startActivityForResult(i,PICK);});
-    Button camera=new Button(this);camera.setText("Scan / take photo with camera");root.addView(camera);
+    Button camera=new Button(this);camera.setText("Scan / take photo with camera");polishButton(camera,false);root.addView(camera);
     camera.setOnClickListener(v->{Intent i=new Intent(android.provider.MediaStore.ACTION_IMAGE_CAPTURE);try{startActivityForResult(i,CAMERA);}catch(Exception e){status.setText("Camera app unavailable.");}});
     preview=new ImageView(this);preview.setAdjustViewBounds(true);preview.setMinimumHeight(200);root.addView(preview);
-    cropButton=new Button(this);cropButton.setText("CROP & POSITION PHOTO (EXACT SELECTED SIZE)");root.addView(cropButton);
+    cropButton=new Button(this);cropButton.setText("CROP & POSITION PHOTO (EXACT SELECTED SIZE)");polishButton(cropButton,false);root.addView(cropButton);
     cropButton.setOnClickListener(v->showCropEditor());
     TextView note=new TextView(this);note.setText("The sheet automatically fills with as many photos as fit at the selected physical size. Uncheck Auto-fill by entering an exact count. Check face position and crop before printing.");root.addView(note);
     TextView sizeLabel=new TextView(this);sizeLabel.setText("Photo size preset (confirm official application rules)");root.addView(sizeLabel);
@@ -134,10 +142,10 @@ public class PassportActivity extends Activity {
     });root.addView(bg);
     TextView editNote=new TextView(this);editNote.setText("Background replacement uses corner-color matching, not AI person segmentation. Review hair edges and official photo rules. Clothes change requires a separate AI model and is not available yet.");root.addView(editNote);
     TextView fitting=new TextView(this);fitting.setText("Auto-fill places the maximum photos that fit; entering a number prints only that many. All sizes use physical millimeter dimensions and cutting gaps.");root.addView(fitting);
-    Button jpg=new Button(this);jpg.setText("Save selected sheet as JPG");root.addView(jpg);jpg.setOnClickListener(v->{if(ready())JpgExport.choose(this,SAVE_JPG,"JB-Passport-Photos-"+paperName()+".jpg");});
-    Button pdf=new Button(this);pdf.setText("Save selected sheet as PDF");root.addView(pdf);
+    Button jpg=new Button(this);jpg.setText("Save selected sheet as JPG");polishButton(jpg,false);root.addView(jpg);jpg.setOnClickListener(v->{if(ready())JpgExport.choose(this,SAVE_JPG,"JB-Passport-Photos-"+paperName()+".jpg");});
+    Button pdf=new Button(this);pdf.setText("Save selected sheet as PDF");polishButton(pdf,false);root.addView(pdf);
     pdf.setOnClickListener(v->{if(!ready())return;Intent i=new Intent(Intent.ACTION_CREATE_DOCUMENT);i.setType("application/pdf");i.addCategory(Intent.CATEGORY_OPENABLE);i.putExtra(Intent.EXTRA_TITLE,"JB-Passport-Photos-"+paperName()+".pdf");startActivityForResult(i,SAVE);});
-    Button print=new Button(this);print.setText("Print selected sheet directly");root.addView(print);print.setOnClickListener(v->{if(ready())printSheet();});
+    Button print=new Button(this);print.setText("Print selected sheet directly");polishButton(print,true);root.addView(print);print.setOnClickListener(v->{if(ready())printSheet();});
     status=new TextView(this);status.setText("Select a photo to begin.");root.addView(status);
   }
   int paperWidth(){return new int[]{289,595,360,420}[paperIndex];}
