@@ -508,7 +508,7 @@ public class MainActivity extends Activity {
   void drawSheetPage(Canvas c,int pageIndex){
     int[] cards=activeCards();if(cards.length==0)return;
     final float pageW=595f,pageH=842f;
-    final float cardW=85.6f*72f/25.4f,cardH=54f*72f/25.4f;
+    final float cardW=85.60f*72f/25.4f,cardH=53.98f*72f/25.4f;
     final float middleGap=32f;
     java.util.ArrayList<Integer> layout=new java.util.ArrayList<>();
     if(mixedA4){
@@ -544,7 +544,21 @@ public class MainActivity extends Activity {
     rounded.addRoundRect(r,radius,radius,Path.Direction.CW);
     c.save();
     c.clipPath(rounded);
-    c.drawBitmap(bmp,null,r,qualityPaint());
+    // Never stretch a scan: preserve its proportions within the exact
+    // Pakistani CNIC physical print area (85.60 x 53.98 mm).
+    Paint white=new Paint(Paint.ANTI_ALIAS_FLAG);white.setColor(Color.WHITE);
+    c.drawRect(r,white);
+    float imageRatio=(float)bmp.getWidth()/Math.max(1,bmp.getHeight());
+    float boxRatio=w/h;
+    RectF fitted;
+    if(imageRatio>boxRatio){
+      float imageH=w/imageRatio;
+      fitted=new RectF(x,y+(h-imageH)/2f,x+w,y+(h+imageH)/2f);
+    }else{
+      float imageW=h*imageRatio;
+      fitted=new RectF(x+(w-imageW)/2f,y,x+(w+imageW)/2f,y+h);
+    }
+    c.drawBitmap(bmp,null,fitted,qualityPaint());
     c.restore();
   }
   void printSheet(){
