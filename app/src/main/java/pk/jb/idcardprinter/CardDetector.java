@@ -190,8 +190,33 @@ public final class CardDetector {
       java.util.ArrayList<Integer> orderIds=new java.util.ArrayList<>();
       for(int i=0;i<candidates.size();i++)orderIds.add(i);
       java.util.Collections.sort(orderIds,(a,b)->Double.compare(scores.get(b),scores.get(a)));
+      java.util.ArrayList<Integer> chosen=new java.util.ArrayList<>();
       for(int idx:orderIds){
-        if(results.size()>=limit)break;
+        if(chosen.size()>=limit)break;
+        Point[] candidate=candidates.get(idx);
+        double cx=0,cy=0;for(Point p:candidate){cx+=p.x;cy+=p.y;}cx/=4;cy/=4;
+        double cw=(dist(candidate[0],candidate[1])+dist(candidate[2],candidate[3]))/2;
+        double ch=(dist(candidate[0],candidate[3])+dist(candidate[1],candidate[2]))/2;
+        boolean overlap=false;
+        for(int prior:chosen){
+          Point[] existing=candidates.get(prior);double px=0,py=0;
+          for(Point p:existing){px+=p.x;py+=p.y;}px/=4;py/=4;
+          double pw=(dist(existing[0],existing[1])+dist(existing[2],existing[3]))/2;
+          double ph=(dist(existing[0],existing[3])+dist(existing[1],existing[2]))/2;
+          if(Math.abs(cx-px)<Math.min(cw,pw)*.55&&Math.abs(cy-py)<Math.min(ch,ph)*.55){overlap=true;break;}
+        }
+        if(!overlap)chosen.add(idx);
+      }
+      // Document reading order: top to bottom, then left to right.
+      java.util.Collections.sort(chosen,(a,b)->{
+        Point[] qa=candidates.get(a),qb=candidates.get(b);
+        double ax=0,ay=0,bx=0,by=0;
+        for(int i=0;i<4;i++){ax+=qa[i].x;ay+=qa[i].y;bx+=qb[i].x;by+=qb[i].y;}
+        ay/=4;by/=4;ax/=4;bx/=4;
+        double rowTolerance=small.height()*.055;
+        return Math.abs(ay-by)>rowTolerance?Double.compare(ay,by):Double.compare(ax,bx);
+      });
+      for(int idx:chosen){
         Point[] q=candidates.get(idx),scaled=new Point[4];
         for(int i=0;i<4;i++)scaled[i]=new Point(q[i].x/factor,q[i].y/factor);
         try{Bitmap card=warp(source,scaled);if(card!=null)results.add(card);}catch(Exception ignored){}
