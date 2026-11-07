@@ -47,22 +47,17 @@ public class SingleCardActivity extends Activity {
         paper.setColor(Color.WHITE);c.drawRect(0,0,595,842,paper);drawSheet(c);c.restore();
       }
     };
-    LinearLayout.LayoutParams sheetParams=new LinearLayout.LayoutParams(-1,320);sheetParams.bottomMargin=18;root.addView(sheetPreview,sheetParams);
+    LinearLayout.LayoutParams sheetParams=new LinearLayout.LayoutParams(-1,440);sheetParams.bottomMargin=18;root.addView(sheetPreview,sheetParams);
     frontView=new ImageView(this); backView=new ImageView(this);
     frontView.setAdjustViewBounds(true); backView.setAdjustViewBounds(true);
-    frontView.setMinimumHeight(90); backView.setMinimumHeight(90);frontView.setMaxHeight(170);backView.setMaxHeight(170);
+    frontView.setMinimumHeight(210); backView.setMinimumHeight(210);frontView.setMaxHeight(340);backView.setMaxHeight(340);frontView.setScaleType(ImageView.ScaleType.FIT_CENTER);backView.setScaleType(ImageView.ScaleType.FIT_CENTER);
     root.addView(section("1  Front of ID card"));
-    addButton(root,"Find Wi-Fi Scanners (Test)",()->WifiScannerDiscovery.show(this));
-    addButton(root,"Scan with Epson Smart Panel",()->openEpsonScanner());
-    addButton(root,"Import Scanned FRONT",()->pick(PICK_FRONT));
-    addButton(root,"Import Scanned BACK",()->pick(PICK_BACK));
-    addButton(root,"📷  Capture front",()->openCamera(CAMERA_FRONT));
-    addButton(root,"Choose existing front photo",()->pick(PICK_FRONT)); root.addView(frontView);
-    addButton(root,"✂  Front manual crop",()->openCrop(frontUri,CROP_FRONT));
+    addButtonRow(root,"Find Wi-Fi Scanners",()->WifiScannerDiscovery.show(this),"Epson Smart Panel",()->openEpsonScanner());
+    addButtonRow(root,"Scan FRONT",()->pick(PICK_FRONT),"Camera FRONT",()->openCamera(CAMERA_FRONT));
+    addButtonRow(root,"Gallery FRONT",()->pick(PICK_FRONT),"Crop FRONT",()->openCrop(frontUri,CROP_FRONT));root.addView(frontView);
     root.addView(section("2  Back of ID card"));
-    addButton(root,"📷  Capture back",()->openCamera(CAMERA_BACK));
-    addButton(root,"Choose existing back photo",()->pick(PICK_BACK)); root.addView(backView);
-    addButton(root,"✂  Back manual crop",()->openCrop(backUri,CROP_BACK));
+    addButtonRow(root,"Scan BACK",()->pick(PICK_BACK),"Camera BACK",()->openCamera(CAMERA_BACK));
+    addButtonRow(root,"Gallery BACK",()->pick(PICK_BACK),"Crop BACK",()->openCrop(backUri,CROP_BACK));root.addView(backView);
     Button advancedToggle=new Button(this);advancedToggle.setText("⚙  More options");styleAction(advancedToggle,false);root.addView(advancedToggle);
     LinearLayout advanced=new LinearLayout(this);advanced.setOrientation(1);advanced.setPadding(12,12,12,12);advanced.setBackground(rounded(Color.WHITE,22));advanced.setVisibility(View.GONE);root.addView(advanced);
     advancedToggle.setOnClickListener(v->{boolean show=advanced.getVisibility()!=View.VISIBLE;advanced.setVisibility(show?View.VISIBLE:View.GONE);advancedToggle.setText(show?"Hide extra options":"⚙  More options");});
@@ -107,6 +102,18 @@ public class SingleCardActivity extends Activity {
     addButton(root,"Save as JPG",()->{if(ready())JpgExport.choose(this,SAVE_JPG,"JB-Single-ID-Card-A4.jpg");});
     addButton(root,"Save PDF",()->{if(!ready())return;Intent i=new Intent(Intent.ACTION_CREATE_DOCUMENT);i.setType("application/pdf");i.addCategory(Intent.CATEGORY_OPENABLE);i.putExtra(Intent.EXTRA_TITLE,"JB-ID-Cards-A4.pdf");startActivityForResult(i,SAVE);});
     status=new TextView(this);status.setText("Capture both sides, then print or save.");status.setTextSize(14);status.setTextColor(Color.rgb(85,103,125));status.setPadding(6,12,6,12);root.addView(status);
+  }
+  void addButtonRow(LinearLayout parent,String left,Runnable leftAction,String right,Runnable rightAction){
+    LinearLayout row=new LinearLayout(this);row.setOrientation(LinearLayout.HORIZONTAL);
+    row.setWeightSum(2f);
+    Button a=new Button(this),b=new Button(this);
+    a.setText(left);b.setText(right);
+    styleAction(a,false);styleAction(b,false);
+    a.setTextSize(13);b.setTextSize(13);a.setPadding(4,8,4,8);b.setPadding(4,8,4,8);
+    LinearLayout.LayoutParams lpA=new LinearLayout.LayoutParams(0,-2,1f),lpB=new LinearLayout.LayoutParams(0,-2,1f);
+    lpA.rightMargin=3;lpB.leftMargin=3;
+    row.addView(a,lpA);row.addView(b,lpB);
+    parent.addView(row);a.setOnClickListener(v->leftAction.run());b.setOnClickListener(v->rightAction.run());
   }
   void addButton(LinearLayout root,String name,Runnable action){Button b=new Button(this);b.setText(name);styleAction(b,name.contains("Capture")||name.contains("Print A4"));LinearLayout.LayoutParams lp=new LinearLayout.LayoutParams(-1,-2);lp.bottomMargin=10;root.addView(b,lp);b.setOnClickListener(v->action.run());}
   void openCrop(Uri uri,int code){if(uri==null){status.setText("Select the photo first.");return;}Intent i=new Intent(this,CropActivity.class);i.setData(uri);startActivityForResult(i,code);}
