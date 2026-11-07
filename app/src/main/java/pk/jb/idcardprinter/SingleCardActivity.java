@@ -27,16 +27,16 @@ public class SingleCardActivity extends Activity {
   int copyCount=5;
   int verticalPosition=1; // 0 top, 1 center, 2 bottom
   static final int PICK_FRONT=101, PICK_BACK=102, SAVE=103, CROP_FRONT=104, CROP_BACK=105, CAMERA_FRONT=106, CAMERA_BACK=107, SAVE_JPG=108;
-  int navy=Color.rgb(23,43,72),accent=Color.rgb(25,105,205);
+  int navy=Color.rgb(22,43,73),accent=Color.rgb(24,104,201);
   GradientDrawable rounded(int color,int radius){GradientDrawable d=new GradientDrawable();d.setColor(color);d.setCornerRadius(radius);return d;}
-  TextView section(String title){TextView t=new TextView(this);t.setText(title);t.setTextColor(navy);t.setTextSize(18);t.setTypeface(null,Typeface.BOLD);t.setPadding(4,18,4,8);return t;}
-  void styleAction(Button b,boolean primary){b.setAllCaps(false);b.setTextSize(16);b.setTypeface(null,Typeface.BOLD);b.setTextColor(primary?Color.WHITE:navy);b.setBackground(rounded(primary?accent:Color.rgb(226,236,249),22));b.setElevation(3);b.setPadding(14,13,14,13);}
+  TextView section(String title){TextView t=new TextView(this);t.setText(title);t.setTextColor(navy);t.setTextSize(18);t.setTypeface(null,Typeface.BOLD);t.setPadding(4,20,4,10);return t;}
+  void styleAction(Button b,boolean primary){b.setAllCaps(false);b.setTextSize(16);b.setTypeface(null,Typeface.BOLD);b.setTextColor(primary?Color.WHITE:navy);b.setBackground(rounded(primary?accent:Color.rgb(231,239,250),18));b.setElevation(2);b.setPadding(12,11,12,11);}
   @Override public void onCreate(Bundle b) {
     super.onCreate(b);
     try{cvReady=org.opencv.android.OpenCVLoader.initLocal();}catch(Throwable e){cvReady=false;}
-    LinearLayout root=new LinearLayout(this); root.setOrientation(1); root.setPadding(20,22,20,34);root.setBackgroundColor(Color.rgb(244,247,252));
+    LinearLayout root=new LinearLayout(this); root.setOrientation(1); root.setPadding(18,22,18,34);root.setBackgroundColor(Color.rgb(245,248,253));
     ScrollView scroll=new ScrollView(this); scroll.addView(root); setContentView(scroll);
-    TextView title=new TextView(this); title.setText("JB Mobile & PhotoState\nID Card A4 Printer"); title.setTextSize(24); title.setGravity(17); root.addView(title);
+    TextView title=new TextView(this); title.setText("Single ID Card\nScan • Crop • Print"); title.setTextSize(23);title.setTextColor(navy);title.setTypeface(null,Typeface.BOLD); title.setGravity(17);title.setPadding(0,0,0,18); root.addView(title);
     TextView previewTitle=new TextView(this);previewTitle.setText("Your A4 preview");previewTitle.setTextSize(16);previewTitle.setTextColor(Color.rgb(21,38,65));root.addView(previewTitle);
     sheetPreview=new View(this){
       Paint paper=new Paint(3);
@@ -47,7 +47,7 @@ public class SingleCardActivity extends Activity {
         paper.setColor(Color.WHITE);c.drawRect(0,0,595,842,paper);drawSheet(c);c.restore();
       }
     };
-    LinearLayout.LayoutParams sheetParams=new LinearLayout.LayoutParams(-1,440);sheetParams.bottomMargin=18;root.addView(sheetPreview,sheetParams);
+    LinearLayout.LayoutParams sheetParams=new LinearLayout.LayoutParams(-1,440);sheetParams.bottomMargin=20;root.addView(sheetPreview,sheetParams);
     frontView=new ImageView(this); backView=new ImageView(this);
     frontView.setAdjustViewBounds(true); backView.setAdjustViewBounds(true);
     frontView.setMinimumHeight(210); backView.setMinimumHeight(210);frontView.setMaxHeight(340);backView.setMaxHeight(340);frontView.setScaleType(ImageView.ScaleType.FIT_CENTER);backView.setScaleType(ImageView.ScaleType.FIT_CENTER);
