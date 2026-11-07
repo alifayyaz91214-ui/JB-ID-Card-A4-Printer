@@ -57,6 +57,7 @@ public class MainActivity extends Activity {
     ScrollView scroll=new ScrollView(this); scroll.addView(root); setContentView(scroll);
     TextView title=new TextView(this); title.setText("JB Mobile & PhotoState\nID Card A4 Printer"); title.setTextSize(24); title.setGravity(17); root.addView(title);
     root.addView(section("1  Add ID cards"));
+    addButton(root,"Find Wi-Fi Scanners (Test)",()->WifiScannerDiscovery.show(this));
     addButton(root,"Scan with Epson Smart Panel",()->openEpsonScanner());
     addButton(root,"Import Scanned Image (FRONT)",()->beginSideImport(true));
     addButton(root,"Import Scanned Image (BACK)",()->beginSideImport(false));
