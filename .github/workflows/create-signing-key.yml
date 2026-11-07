@@ -1,0 +1,40 @@
+name: Create Android Signing Key (one-time)
+on:
+  workflow_dispatch:
+jobs:
+  generate:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Generate new private signing keystore
+        run: |
+          set -euo pipefail
+          KEYSTORE_PASS="$(openssl rand -hex 24)"
+          KEY_PASS="$KEYSTORE_PASS"
+          keytool -genkeypair -v -keystore "$RUNNER_TEMP/jb-release.jks" -storetype PKCS12 -storepass "$KEYSTORE_PASS" -keypass "$KEY_PASS" -alias jbmobile -keyalg RSA -keysize 3072 -validity 10000 -dname "CN=JB Mobile and PhotoState, OU=Mobile, O=JB, L=Punjab, C=PK"
+          printf '%s' "$KEYSTORE_PASS" > "$RUNNER_TEMP/store-password.txt"
+          printf '%s' "jbmobile" > "$RUNNER_TEMP/key-alias.txt"
+          base64 -w 0 "$RUNNER_TEMP/jb-release.jks" > "$RUNNER_TEMP/keystore-base64.txt"
+          mkdir -p "$RUNNER_TEMP/signing-setup"
+          cp "$RUNNER_TEMP/jb-release.jks" "$RUNNER_TEMP/signing-setup/jb-release.jks"
+          cp "$RUNNER_TEMP/store-password.txt" "$RUNNER_TEMP/signing-setup/store-password.txt"
+          cp "$RUNNER_TEMP/key-alias.txt" "$RUNNER_TEMP/signing-setup/key-alias.txt"
+          cp "$RUNNER_TEMP/keystore-base64.txt" "$RUNNER_TEMP/signing-setup/keystore-base64.txt"
+          cat > "$RUNNER_TEMP/signing-setup/README.txt" <<'EOF'
+          PRIVATE: Do not share this ZIP or any contained file.
+          Save jb-release.jks and store-password.txt somewhere private and backed up.
+          GitHub repository Settings > Secrets and variables > Actions:
+          JB_KEYSTORE_BASE64 = entire content of keystore-base64.txt
+          JB_KEYSTORE_PASSWORD = entire content of store-password.txt
+          JB_KEY_ALIAS = jbmobile
+          JB_KEY_PASSWORD = same content as store-password.txt
+          Never rerun this workflow to replace the existing signing key.
+          If this key is lost, future updates to installed copies may become impossible.
+          Once the four secrets are saved, delete this workflow's run artifacts from GitHub Actions to reduce exposure.
+          EOF
+      - name: Upload private one-time setup bundle (short retention)
+        uses: actions/upload-artifact@v4
+        with:
+          name: PRIVATE-JB-signing-key-setup-DELETE-AFTER-USE
+          path: ${{ runner.temp }}/signing-setup/
+          retention-days: 1
+          if-no-files-found: error
