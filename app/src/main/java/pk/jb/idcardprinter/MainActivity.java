@@ -187,6 +187,24 @@ public class MainActivity extends Activity {
       if(f!=null&&b==null)addButton(panel,"This is BACK (not Front)",()->{if(index==0){back=front;front=null;}else{extraBack[index]=extraFront[index];extraFront[index]=null;}cardBackSources[index]=cardFrontSources[index];cardFrontSources[index]=null;refresh();});
       if(b!=null&&f==null)addButton(panel,"This is FRONT (not Back)",()->{if(index==0){front=back;back=null;}else{extraFront[index]=extraBack[index];extraBack[index]=null;}cardFrontSources[index]=cardBackSources[index];cardBackSources[index]=null;refresh();});
       if(f!=null||b!=null){
+        addButton(panel,"Move Front / Back to another card",()->{
+          String[] options={"Move Front","Move Back"};
+          new android.app.AlertDialog.Builder(this).setTitle("Choose side").setItems(options,(dialog,side)->{
+            boolean moveFront=side==0;Bitmap picture=sideBitmap(index,moveFront);
+            if(picture==null){status.setText("This side is empty.");return;}
+            String[] destinations={"Card 1","Card 2","Card 3","Card 4"};
+            new android.app.AlertDialog.Builder(this).setTitle("Move to which card?").setItems(destinations,(d,target)->{
+              if(target==index)return;
+              if(sideBitmap(target,moveFront)!=null){status.setText("Destination already has this side. Remove it first.");return;}
+              Uri old=moveFront?cardFrontSources[index]:cardBackSources[index];
+              if(index==0){if(moveFront)front=null;else back=null;}
+              else{if(moveFront)extraFront[index]=null;else extraBack[index]=null;}
+              if(moveFront)cardFrontSources[index]=null;else cardBackSources[index]=null;
+              assignSide(target,moveFront,picture,old);refresh();
+              status.setText("Side moved to Card "+(target+1)+".");
+            }).show();
+          }).show();
+        });
         addButton(panel,"Remove this card",()->{if(index==0){front=null;back=null;}else{extraFront[index]=null;extraBack[index]=null;}cardFrontSources[index]=null;cardBackSources[index]=null;refresh();});
         TextView count=section("Copies: "+cardCopies[id]);panel.addView(count);
         SeekBar slider=new SeekBar(this);slider.setMax(4);slider.setProgress(cardCopies[id]-1);panel.addView(slider);
