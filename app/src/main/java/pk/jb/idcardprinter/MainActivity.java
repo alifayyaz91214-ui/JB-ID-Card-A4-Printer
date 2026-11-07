@@ -33,6 +33,7 @@ public class MainActivity extends Activity {
   int shownCards=1;
   int importPage=0;
   int scanSerial=0;
+  boolean importingFront=true;
   boolean[] selectedCards={true,true,true,true};
   TextView status;
   View sheetPreview;
@@ -54,9 +55,10 @@ public class MainActivity extends Activity {
     ScrollView scroll=new ScrollView(this); scroll.addView(root); setContentView(scroll);
     TextView title=new TextView(this); title.setText("JB Mobile & PhotoState\nID Card A4 Printer"); title.setTextSize(24); title.setGravity(17); root.addView(title);
     root.addView(section("1  Add ID cards"));
-    addButton(root,"+  Add photo or document",()->showImportChoices());
-    TextView instruction=new TextView(this);instruction.setText("Choose Camera or Gallery. Then crop each card front and back.");instruction.setTextColor(navy);instruction.setPadding(8,4,8,12);root.addView(instruction);
-    importedPreview=new ImageView(this);importedPreview.setAdjustViewBounds(true);importedPreview.setMaxHeight(240);root.addView(importedPreview);
+    addButton(root,"1  Add FRONT document",()->beginSideImport(true));
+    addButton(root,"2  Add BACK document",()->beginSideImport(false));
+    TextView instruction=new TextView(this);instruction.setText("Add all fronts first, then add backs in the same order. Check each card below.");instruction.setTextColor(navy);instruction.setPadding(8,4,8,12);root.addView(instruction);
+    importedPreview=new ImageView(this);importedPreview.setAdjustViewBounds(true);importedPreview.setMaxHeight(300);root.addView(importedPreview);
     addButton(root,"Start new sheet / Clear all cards",()->{scanSerial++;selectedCards=new boolean[]{true,true,true,true};front=null;back=null;originalFront=null;originalBack=null;extraFront=new Bitmap[4];extraBack=new Bitmap[4];cardFrontSources=new Uri[4];cardBackSources=new Uri[4];shownCards=1;sourceDocument=null;importedPreview.setImageDrawable(null);refresh();status.setText("New empty sheet. Add a photo or document.");});
     cardList=new LinearLayout(this);cardList.setOrientation(1);root.addView(cardList);
     frontView=new ImageView(this);backView=new ImageView(this);
@@ -163,9 +165,10 @@ public class MainActivity extends Activity {
       refresh();
     }catch(Exception e){status.setText("Image error: "+e.getMessage());}
   }
+  void beginSideImport(boolean frontSide){importingFront=frontSide;showImportChoices();}
   void showImportChoices(){
     String[] choices={"Camera","Gallery / JPG / PNG / PDF"};
-    new android.app.AlertDialog.Builder(this).setTitle("Add ID card").setItems(choices,(dialog,which)->{
+    new android.app.AlertDialog.Builder(this).setTitle(importingFront?"Add FRONT document":"Add BACK document").setItems(choices,(dialog,which)->{
       if(which==0)openCamera(CAMERA_FRONT);
       else{Intent i=new Intent(Intent.ACTION_OPEN_DOCUMENT);i.setType("*/*");i.addCategory(Intent.CATEGORY_OPENABLE);i.putExtra(Intent.EXTRA_MIME_TYPES,new String[]{"image/jpeg","image/png","image/webp","application/pdf"});startActivityForResult(i,PICK_DOCUMENT);}
     }).show();
@@ -180,9 +183,9 @@ public class MainActivity extends Activity {
       LinearLayout panel=new LinearLayout(this);panel.setOrientation(1);panel.setPadding(12,10,12,14);panel.setBackground(rounded(Color.WHITE,18));
       LinearLayout.LayoutParams margin=new LinearLayout.LayoutParams(-1,-2);margin.bottomMargin=12;cardList.addView(panel,margin);
       CheckBox include=new CheckBox(this);include.setText("Card "+(id+1)+"  •  "+(f!=null&&b!=null?"Front + Back":f!=null?"Front only":b!=null?"Back only":"Add card"));include.setTextSize(17);include.setTypeface(null,Typeface.BOLD);include.setChecked(selectedCards[id]);panel.addView(include);include.setOnCheckedChangeListener((button,checked)->{selectedCards[index]=checked;updateSheet();});
-      if(f!=null){ImageView image=new ImageView(this);image.setImageBitmap(previewBitmap(f));image.setAdjustViewBounds(true);image.setMaxHeight(125);panel.addView(image);}
+      if(f!=null){ImageView image=new ImageView(this);image.setImageBitmap(previewBitmap(f));image.setAdjustViewBounds(true);image.setScaleType(ImageView.ScaleType.FIT_CENTER);LinearLayout.LayoutParams imageParams=new LinearLayout.LayoutParams(-1,220);panel.addView(image,imageParams);}
       addButton(panel,"✂  Front: "+(f==null?"select and crop":"edit crop"),()->cropSlot(index,true));
-      if(b!=null){ImageView image=new ImageView(this);image.setImageBitmap(previewBitmap(b));image.setAdjustViewBounds(true);image.setMaxHeight(125);panel.addView(image);}
+      if(b!=null){ImageView image=new ImageView(this);image.setImageBitmap(previewBitmap(b));image.setAdjustViewBounds(true);image.setScaleType(ImageView.ScaleType.FIT_CENTER);LinearLayout.LayoutParams imageParams=new LinearLayout.LayoutParams(-1,220);panel.addView(image,imageParams);}
       addButton(panel,"✂  Back: "+(b==null?"select and crop":"edit crop"),()->cropSlot(index,false));
       if(f!=null&&b==null)addButton(panel,"This is BACK (not Front)",()->{if(index==0){back=front;front=null;}else{extraBack[index]=extraFront[index];extraFront[index]=null;}cardBackSources[index]=cardFrontSources[index];cardFrontSources[index]=null;refresh();});
       if(b!=null&&f==null)addButton(panel,"This is FRONT (not Back)",()->{if(index==0){front=back;back=null;}else{extraFront[index]=extraBack[index];extraBack[index]=null;}cardFrontSources[index]=cardBackSources[index];cardBackSources[index]=null;refresh();});
@@ -259,8 +262,13 @@ public class MainActivity extends Activity {
           status.setText("No reliable card edges found. Use Front / Back manual crop."+(problem==null?"":" "+problem));
           return;
         }
-        status.setText(cards.size()+" card side(s) found. Assign each image to its correct Front / Back.");
-        assignDetected(cards,uri,0);
+        int added=0;
+        for(int i=0;i<cards.size()&&i<4;i++){
+          assignSide(i,importingFront,cards.get(i),uri);
+          added++;
+        }
+        refresh();
+        status.setText(added+(importingFront?" FRONT":" BACK")+" side(s) added to Card 1–"+added+". Check matching and crop. You can move any side to another card.");
       });
     }).start();
   }
