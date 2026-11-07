@@ -57,6 +57,9 @@ public class MainActivity extends Activity {
     ScrollView scroll=new ScrollView(this); scroll.addView(root); setContentView(scroll);
     TextView title=new TextView(this); title.setText("JB Mobile & PhotoState\nID Card A4 Printer"); title.setTextSize(24); title.setGravity(17); root.addView(title);
     root.addView(section("1  Add ID cards"));
+    addButton(root,"Scan with Epson Smart Panel",()->openEpsonScanner());
+    addButton(root,"Import Scanned Image (FRONT)",()->beginSideImport(true));
+    addButton(root,"Import Scanned Image (BACK)",()->beginSideImport(false));
     addButton(root,"1  Add FRONT document",()->beginSideImport(true));
     addButton(root,"2  Add BACK document",()->beginSideImport(false));
     TextView instruction=new TextView(this);instruction.setText("Add all fronts first, then add backs in the same order. Check each card below.");instruction.setTextColor(navy);instruction.setPadding(8,4,8,12);root.addView(instruction);
@@ -129,6 +132,18 @@ public class MainActivity extends Activity {
   void addButton(LinearLayout root,String name,Runnable action){Button b=new Button(this);b.setText(name);styleAction(b,name.contains("Capture")||name.contains("Print A4"));LinearLayout.LayoutParams lp=new LinearLayout.LayoutParams(-1,-2);lp.bottomMargin=10;root.addView(b,lp);b.setOnClickListener(v->action.run());}
   void openCrop(Uri uri,int code){if(uri==null){status.setText("Select the photo first.");return;}Intent i=new Intent(this,CropActivity.class);i.setData(uri);startActivityForResult(i,code);}
   void openCamera(int code){Intent i=new Intent(this,CardCameraActivity.class);startActivityForResult(i,code);}
+  void openEpsonScanner(){
+    Intent launch=getPackageManager().getLaunchIntentForPackage("com.epson.epsonsmart");
+    if(launch==null)launch=getPackageManager().getLaunchIntentForPackage("com.epson.epsonsmartpanel");
+    if(launch!=null){
+      try{startActivity(launch);status.setText("Scan in Epson Smart Panel, save the image, return here and tap Import Scanned Image.");return;}
+      catch(Exception ignored){}
+    }
+    new android.app.AlertDialog.Builder(this).setTitle("Epson Smart Panel")
+      .setMessage("Open Epson Smart Panel to scan and save a JPG. Then return to JB and import the saved scan. If Smart Panel is not installed, install it first.")
+      .setPositiveButton("Open app settings",(d,w)->{try{startActivity(new Intent(Intent.ACTION_VIEW,Uri.parse("market://search?q=Epson Smart Panel")));}catch(Exception e){status.setText("Open Epson Smart Panel manually.");}})
+      .setNegativeButton("Cancel",null).show();
+  }
   void pick(int code){Intent i=new Intent(Intent.ACTION_GET_CONTENT);i.setType("image/*");startActivityForResult(i,code);}
   @Override protected void onActivityResult(int request,int result,Intent data){
     super.onActivityResult(request,result,data);
