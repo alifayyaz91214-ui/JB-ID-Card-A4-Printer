@@ -57,12 +57,8 @@ public class MainActivity extends Activity {
     ScrollView scroll=new ScrollView(this); scroll.addView(root); setContentView(scroll);
     TextView title=new TextView(this); title.setText("JB Mobile & PhotoState\nID Card A4 Printer"); title.setTextSize(24); title.setGravity(17); root.addView(title);
     root.addView(section("1  Add ID cards"));
-    addButton(root,"Find Wi-Fi Scanners (Test)",()->WifiScannerDiscovery.show(this));
-    addButton(root,"Scan with Epson Smart Panel",()->openEpsonScanner());
-    addButton(root,"Import Scanned Image (FRONT)",()->beginSideImport(true));
-    addButton(root,"Import Scanned Image (BACK)",()->beginSideImport(false));
-    addButton(root,"1  Add FRONT document",()->beginSideImport(true));
-    addButton(root,"2  Add BACK document",()->beginSideImport(false));
+    addButton(root,"＋  Select FRONT document",()->showDocumentSources(true));
+    addButton(root,"＋  Select BACK document",()->showDocumentSources(false));
     TextView instruction=new TextView(this);instruction.setText("Add all fronts first, then add backs in the same order. Check each card below.");instruction.setTextColor(navy);instruction.setPadding(8,4,8,12);root.addView(instruction);
     importedPreview=new ImageView(this);importedPreview.setAdjustViewBounds(true);importedPreview.setMaxHeight(300);root.addView(importedPreview);
     addButton(root,"Start new sheet / Clear all cards",()->{scanSerial++;selectedCards=new boolean[]{true,true,true,true};frontNumbers=new String[4];backNumbers=new String[4];front=null;back=null;originalFront=null;originalBack=null;extraFront=new Bitmap[4];extraBack=new Bitmap[4];cardFrontSources=new Uri[4];cardBackSources=new Uri[4];shownCards=1;sourceDocument=null;importedPreview.setImageDrawable(null);refresh();status.setText("New empty sheet. Add a photo or document.");});
@@ -131,6 +127,21 @@ public class MainActivity extends Activity {
     status=new TextView(this);status.setText("Capture both sides, then print or save.");status.setTextSize(14);status.setTextColor(Color.rgb(85,103,125));status.setPadding(6,12,6,12);root.addView(status);
   }
   void addButton(LinearLayout root,String name,Runnable action){Button b=new Button(this);b.setText(name);styleAction(b,name.contains("Capture")||name.contains("Print A4"));LinearLayout.LayoutParams lp=new LinearLayout.LayoutParams(-1,-2);lp.bottomMargin=10;root.addView(b,lp);b.setOnClickListener(v->action.run());}
+  void showDocumentSources(boolean isFront){
+    java.util.ArrayList<String> labels=new java.util.ArrayList<>();
+    java.util.ArrayList<Runnable> actions=new java.util.ArrayList<>();
+    labels.add("Gallery / Saved scan / PDF");actions.add(()->beginSideImport(isFront));
+    labels.add("Camera");actions.add(()->{importingFront=isFront;openCamera(isFront?CAMERA_FRONT:CAMERA_BACK);});
+    labels.add("Find Wi-Fi Scanners");actions.add(()->WifiScannerDiscovery.show(this));
+    if(getPackageManager().getLaunchIntentForPackage("com.epson.epsonsmart")!=null
+      ||getPackageManager().getLaunchIntentForPackage("com.epson.epsonsmartpanel")!=null){
+      labels.add("Epson Smart Panel");actions.add(()->openEpsonScanner());
+    }
+    new android.app.AlertDialog.Builder(this)
+      .setTitle(isFront?"Select FRONT document":"Select BACK document")
+      .setItems(labels.toArray(new String[0]),(dialog,which)->actions.get(which).run())
+      .setNegativeButton("Cancel",null).show();
+  }
   void openCrop(Uri uri,int code){if(uri==null){status.setText("Select the photo first.");return;}Intent i=new Intent(this,CropActivity.class);i.setData(uri);startActivityForResult(i,code);}
   void openCamera(int code){Intent i=new Intent(this,CardCameraActivity.class);startActivityForResult(i,code);}
   void openEpsonScanner(){
