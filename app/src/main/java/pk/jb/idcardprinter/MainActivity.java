@@ -215,6 +215,28 @@ public class MainActivity extends Activity {
     refresh();
     status.setText("Mixed A4 ready: "+pageCount()+" page(s). Check the A4 preview before printing.");
   }
+  Bitmap cardDisplayPreview(Bitmap source){
+    Bitmap bitmap=previewBitmap(source);
+    if(bitmap==null)return null;
+    int w=bitmap.getWidth(),h=bitmap.getHeight();
+    if(w<30||h<30)return bitmap;
+    // Trim only blank white outer margins in the on-screen preview; keep the print bitmap unchanged.
+    int left=w,top=h,right=-1,bottom=-1;
+    int step=Math.max(1,Math.min(w,h)/350);
+    for(int y=0;y<h;y+=step)for(int x=0;x<w;x+=step){
+      int color=bitmap.getPixel(x,y);
+      int r=Color.red(color),g=Color.green(color),b=Color.blue(color);
+      if(Math.min(r,Math.min(g,b))<218 || Math.max(r,Math.max(g,b))-Math.min(r,Math.min(g,b))>28){
+        left=Math.min(left,x);right=Math.max(right,x);top=Math.min(top,y);bottom=Math.max(bottom,y);
+      }
+    }
+    if(right<=left||bottom<=top)return bitmap;
+    int cropW=Math.min(w-left,right-left+step),cropH=Math.min(h-top,bottom-top+step);
+    // Avoid zooming into a tiny logo or text when a nearly white card has weak boundaries.
+    if(cropW<w*.48||cropH<h*.40)return bitmap;
+    if(cropW>w*.96&&cropH>h*.96)return bitmap;
+    return Bitmap.createBitmap(bitmap,left,top,cropW,cropH);
+  }
   void renderCardList(){
     if(cardList==null)return;
     cardList.removeAllViews();
@@ -225,9 +247,9 @@ public class MainActivity extends Activity {
       LinearLayout panel=new LinearLayout(this);panel.setOrientation(1);panel.setPadding(12,10,12,14);panel.setBackground(rounded(Color.WHITE,18));
       LinearLayout.LayoutParams margin=new LinearLayout.LayoutParams(-1,-2);margin.bottomMargin=12;cardList.addView(panel,margin);
       CheckBox include=new CheckBox(this);include.setText("Card "+(id+1)+"  •  "+(f!=null&&b!=null?"Front + Back":f!=null?"Front only":b!=null?"Back only":"Add card"));include.setTextSize(17);include.setTypeface(null,Typeface.BOLD);include.setChecked(selectedCards[id]);panel.addView(include);include.setOnCheckedChangeListener((button,checked)->{selectedCards[index]=checked;if(checked&&cardCopies[index]==0)cardCopies[index]=1;renderCopiesPanel();updateSheet();});
-      if(f!=null){ImageView image=new ImageView(this);image.setImageBitmap(previewBitmap(f));image.setAdjustViewBounds(true);image.setScaleType(ImageView.ScaleType.FIT_CENTER);LinearLayout.LayoutParams imageParams=new LinearLayout.LayoutParams(-1,320);panel.addView(image,imageParams);}
+      if(f!=null){ImageView image=new ImageView(this);image.setImageBitmap(cardDisplayPreview(f));image.setAdjustViewBounds(true);image.setScaleType(ImageView.ScaleType.FIT_CENTER);LinearLayout.LayoutParams imageParams=new LinearLayout.LayoutParams(-1,320);panel.addView(image,imageParams);}
       addButton(panel,"✂  Front: "+(f==null?"select and crop":"edit crop"),()->cropSlot(index,true));
-      if(b!=null){ImageView image=new ImageView(this);image.setImageBitmap(previewBitmap(b));image.setAdjustViewBounds(true);image.setScaleType(ImageView.ScaleType.FIT_CENTER);LinearLayout.LayoutParams imageParams=new LinearLayout.LayoutParams(-1,220);panel.addView(image,imageParams);}
+      if(b!=null){ImageView image=new ImageView(this);image.setImageBitmap(cardDisplayPreview(b));image.setAdjustViewBounds(true);image.setScaleType(ImageView.ScaleType.FIT_CENTER);LinearLayout.LayoutParams imageParams=new LinearLayout.LayoutParams(-1,320);panel.addView(image,imageParams);}
       addButton(panel,"✂  Back: "+(b==null?"select and crop":"edit crop"),()->cropSlot(index,false));
       if(f!=null&&b==null)addButton(panel,"This is BACK (not Front)",()->{if(index==0){back=front;front=null;}else{extraBack[index]=extraFront[index];extraFront[index]=null;}cardBackSources[index]=cardFrontSources[index];cardFrontSources[index]=null;refresh();});
       if(b!=null&&f==null)addButton(panel,"This is FRONT (not Back)",()->{if(index==0){front=back;back=null;}else{extraFront[index]=extraBack[index];extraBack[index]=null;}cardFrontSources[index]=cardBackSources[index];cardBackSources[index]=null;refresh();});
