@@ -30,8 +30,8 @@ public class PhotoCopyActivity extends Activity {
   @Override public void onCreate(Bundle b){
     super.onCreate(b);
     ScrollView scroll=new ScrollView(this);
-    LinearLayout root=new LinearLayout(this);root.setOrientation(1);root.setPadding(22,22,22,30);root.setBackgroundColor(Color.rgb(244,247,252));scroll.addView(root);setContentView(scroll);
-    TextView title=new TextView(this);title.setText("A4 PHOTO COPY STUDIO");title.setTextSize(24);title.setTypeface(null,Typeface.BOLD);title.setTextColor(Color.rgb(20,48,88));root.addView(title);
+    LinearLayout root=new LinearLayout(this);root.setOrientation(1);root.setPadding(18,22,18,30);root.setBackgroundColor(Color.rgb(245,248,253));scroll.addView(root);setContentView(scroll);
+    TextView title=new TextView(this);title.setText("A4 Photo Copy Studio");title.setTextSize(23);title.setTypeface(null,Typeface.BOLD);title.setTextColor(Color.rgb(22,43,73));root.addView(title);
     TextView sub=new TextView(this);sub.setText("Full A4 document scanning • adjustable print quality • multiple pages");root.addView(sub);
     sheet=new View(this){
       Paint p=new Paint(3);
@@ -43,7 +43,7 @@ public class PhotoCopyActivity extends Activity {
         drawPhotos(canvas);canvas.restoreToCount(saved);
       }
     };
-    LinearLayout.LayoutParams previewLp=new LinearLayout.LayoutParams(-1,470);previewLp.topMargin=12;previewLp.bottomMargin=12;root.addView(sheet,previewLp);
+    LinearLayout.LayoutParams previewLp=new LinearLayout.LayoutParams(-1,400);previewLp.topMargin=12;previewLp.bottomMargin=12;root.addView(sheet,previewLp);
     summary=new TextView(this);summary.setTextSize(14);root.addView(summary);
     Button select=new Button(this);select.setText("Select A4 document from gallery");root.addView(select);
     select.setOnClickListener(v->{Intent i=new Intent(Intent.ACTION_GET_CONTENT);i.setType("image/*");startActivityForResult(i,PICK);});
