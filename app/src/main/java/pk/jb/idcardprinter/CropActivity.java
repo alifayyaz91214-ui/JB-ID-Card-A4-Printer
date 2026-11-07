@@ -13,10 +13,12 @@ public class CropActivity extends Activity {
   CropView cropView;
   TextView help;
   TextView selectedLabel;
+  boolean hdEnhance=false;
   @Override public void onCreate(Bundle state) {
     super.onCreate(state);
     LinearLayout root=new LinearLayout(this);root.setOrientation(1);root.setPadding(12,12,12,12);
-    help=new TextView(this);help.setText("Zoom in to inspect corners. Select TL/TR/BR/BL then use arrow buttons for precise adjustments without covering the corner with your finger.");help.setTextSize(16);root.addView(help);
+    root.setBackgroundColor(Color.rgb(245,248,253));
+    help=new TextView(this);help.setText("Tap a card to select its corners. Zoom or adjust the four dots before saving.");help.setTextSize(15);help.setTextColor(Color.rgb(22,43,73));root.addView(help);
     cropView=new CropView();root.addView(cropView,new LinearLayout.LayoutParams(-1,0,1));
     TextView zoomText=new TextView(this);zoomText.setText("Zoom: 100% • Drag outside corner dots or use arrow controls");root.addView(zoomText);
     SeekBar zoomBar=new SeekBar(this);zoomBar.setMax(300);zoomBar.setProgress(0);root.addView(zoomBar);
@@ -37,7 +39,15 @@ public class CropActivity extends Activity {
     LinearLayout buttons=new LinearLayout(this);buttons.setOrientation(0);
     Button reset=new Button(this);reset.setText("Reset corners");buttons.addView(reset,new LinearLayout.LayoutParams(0,-2,1));reset.setOnClickListener(v->cropView.reset());
     Button save=new Button(this);save.setText("Crop & Save");buttons.addView(save,new LinearLayout.LayoutParams(0,-2,1));save.setOnClickListener(v->save());
-    root.addView(buttons);setContentView(root);
+    root.addView(buttons);
+    CheckBox enhance=new CheckBox(this);enhance.setText("HD Enhance • improve contrast and readability");enhance.setTextColor(Color.rgb(22,43,73));enhance.setChecked(false);
+    enhance.setOnCheckedChangeListener((button,checked)->hdEnhance=checked);
+    root.addView(enhance);
+    save.setTextColor(Color.WHITE);save.setAllCaps(false);
+    android.graphics.drawable.GradientDrawable saveBg=new android.graphics.drawable.GradientDrawable();
+    saveBg.setColor(Color.rgb(24,104,201));saveBg.setCornerRadius(18);save.setBackground(saveBg);
+    reset.setAllCaps(false);
+    setContentView(root);
     try{
       Uri uri=getIntent().getData();if(uri==null)throw new IOException("Missing photo");
       BitmapFactory.Options options=new BitmapFactory.Options();options.inJustDecodeBounds=true;
@@ -67,10 +77,35 @@ public class CropActivity extends Activity {
       Bitmap output=Bitmap.createBitmap(width,height,Bitmap.Config.ARGB_8888);
       Canvas canvas=new Canvas(output);canvas.drawColor(Color.WHITE);
       canvas.drawBitmap(original,matrix,new Paint(Paint.ANTI_ALIAS_FLAG|Paint.FILTER_BITMAP_FLAG));
+      if(hdEnhance){
+        Bitmap enhanced=enhanceScan(output);
+        if(enhanced!=output){output.recycle();output=enhanced;}
+      }
       File outputFile=new File(getCacheDir(),"manual-crop-"+System.currentTimeMillis()+".png");
       try(FileOutputStream out=new FileOutputStream(outputFile)){output.compress(Bitmap.CompressFormat.PNG,100,out);}
       Intent result=new Intent();result.putExtra("cropPath",outputFile.getAbsolutePath());setResult(RESULT_OK,result);finish();
     }catch(Exception e){Toast.makeText(this,"Crop failed: "+e.getMessage(),Toast.LENGTH_LONG).show();}
+  }
+  // Mild local processing only; preserve color and avoid aggressive thresholding
+  // that can erase fine CNIC text, signatures or security patterns.
+  Bitmap enhanceScan(Bitmap source){
+    int w=source.getWidth(),h=source.getHeight();
+    Bitmap result=Bitmap.createBitmap(w,h,Bitmap.Config.ARGB_8888);
+    int[] pixels=new int[w];
+    for(int y=0;y<h;y++){
+      source.getPixels(pixels,0,w,0,y,w,1);
+      for(int x=0;x<w;x++){
+        int c=pixels[x];
+        int r=adjustChannel(Color.red(c)),g=adjustChannel(Color.green(c)),b=adjustChannel(Color.blue(c));
+        pixels[x]=Color.argb(Color.alpha(c),r,g,b);
+      }
+      result.setPixels(pixels,0,w,0,y,w,1);
+    }
+    return result;
+  }
+  int adjustChannel(int c){
+    float v=(c-128f)*1.13f+132f;
+    return Math.max(0,Math.min(255,Math.round(v)));
   }
   class CropView extends View{
     Bitmap bitmap;float[] points=new float[8];Paint paint=new Paint(3);
