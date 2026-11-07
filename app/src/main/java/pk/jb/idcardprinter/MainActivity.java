@@ -110,7 +110,7 @@ public class MainActivity extends Activity {
     String[] positionNames={"Top","Center","Bottom"};
     for(int i=0;i<3;i++){RadioButton rb=new RadioButton(this);rb.setId(720+i);rb.setText(positionNames[i]);positions.addView(rb);}
     positions.check(721);positions.setOnCheckedChangeListener((g,id)->{verticalPosition=id-720;updateSheet();});advanced.addView(positions);
-    root.addView(section("2  A4 layout"));
+    root.addView(section("2  Select cards and copies above, then choose A4 layout"));
     CheckBox mixedToggle=new CheckBox(this);mixedToggle.setText("Mix selected cards on one A4 sheet");mixedToggle.setChecked(true);mixedA4=true;root.addView(mixedToggle);
     mixedToggle.setOnCheckedChangeListener((button,checked)->{mixedA4=checked;refresh();});
     addButton(root,"Choose first card to print",()->{
@@ -249,6 +249,7 @@ public class MainActivity extends Activity {
   void scanDocument(Bitmap image,Uri uri){
     if(image==null){status.setText("Could not read photo.");return;}
     final int serial=++scanSerial;
+    final boolean sideIsFront=importingFront;
     status.setText("Finding ID cards automatically...");
     new Thread(()->{
       java.util.List<Bitmap> found=new java.util.ArrayList<>();
@@ -264,11 +265,11 @@ public class MainActivity extends Activity {
         }
         int added=0;
         for(int i=0;i<cards.size()&&i<4;i++){
-          assignSide(i,importingFront,cards.get(i),uri);
+          assignSide(i,sideIsFront,cards.get(i),uri);
           added++;
         }
         refresh();
-        status.setText(added+(importingFront?" FRONT":" BACK")+" side(s) added to Card 1–"+added+". Check matching and crop. You can move any side to another card.");
+        status.setText(added+(sideIsFront?" FRONT":" BACK")+" side(s) added to Card 1–"+added+". Check matching and crop. You can move any side to another card.");
       });
     }).start();
   }
