@@ -52,6 +52,7 @@ public class SingleCardActivity extends Activity {
     frontView.setAdjustViewBounds(true); backView.setAdjustViewBounds(true);
     frontView.setMinimumHeight(90); backView.setMinimumHeight(90);frontView.setMaxHeight(170);backView.setMaxHeight(170);
     root.addView(section("1  Front of ID card"));
+    addButton(root,"Find Wi-Fi Scanners (Test)",()->WifiScannerDiscovery.show(this));
     addButton(root,"Scan with Epson Smart Panel",()->openEpsonScanner());
     addButton(root,"Import Scanned FRONT",()->pick(PICK_FRONT));
     addButton(root,"Import Scanned BACK",()->pick(PICK_BACK));
