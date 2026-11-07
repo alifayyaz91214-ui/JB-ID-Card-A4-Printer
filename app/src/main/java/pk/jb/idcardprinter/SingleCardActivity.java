@@ -52,12 +52,13 @@ public class SingleCardActivity extends Activity {
     frontView.setAdjustViewBounds(true); backView.setAdjustViewBounds(true);
     frontView.setMinimumHeight(210); backView.setMinimumHeight(210);frontView.setMaxHeight(340);backView.setMaxHeight(340);frontView.setScaleType(ImageView.ScaleType.FIT_CENTER);backView.setScaleType(ImageView.ScaleType.FIT_CENTER);
     root.addView(section("1  Front of ID card"));
-    addButtonRow(root,"Find Wi-Fi Scanners",()->WifiScannerDiscovery.show(this),"Epson Smart Panel",()->openEpsonScanner());
-    addButtonRow(root,"Scan FRONT",()->pick(PICK_FRONT),"Camera FRONT",()->openCamera(CAMERA_FRONT));
-    addButtonRow(root,"Gallery FRONT",()->pick(PICK_FRONT),"Crop FRONT",()->openCrop(frontUri,CROP_FRONT));root.addView(frontView);
+    addButton(root,"＋  Select FRONT",()->showSourceChoices(true));
+    addButton(root,"✂  Manual Crop FRONT",()->openCrop(frontUri,CROP_FRONT));
+    root.addView(frontView);
     root.addView(section("2  Back of ID card"));
-    addButtonRow(root,"Scan BACK",()->pick(PICK_BACK),"Camera BACK",()->openCamera(CAMERA_BACK));
-    addButtonRow(root,"Gallery BACK",()->pick(PICK_BACK),"Crop BACK",()->openCrop(backUri,CROP_BACK));root.addView(backView);
+    addButton(root,"＋  Select BACK",()->showSourceChoices(false));
+    addButton(root,"✂  Manual Crop BACK",()->openCrop(backUri,CROP_BACK));
+    root.addView(backView);
     Button advancedToggle=new Button(this);advancedToggle.setText("⚙  More options");styleAction(advancedToggle,false);root.addView(advancedToggle);
     LinearLayout advanced=new LinearLayout(this);advanced.setOrientation(1);advanced.setPadding(12,12,12,12);advanced.setBackground(rounded(Color.WHITE,22));advanced.setVisibility(View.GONE);root.addView(advanced);
     advancedToggle.setOnClickListener(v->{boolean show=advanced.getVisibility()!=View.VISIBLE;advanced.setVisibility(show?View.VISIBLE:View.GONE);advancedToggle.setText(show?"Hide extra options":"⚙  More options");});
@@ -102,6 +103,24 @@ public class SingleCardActivity extends Activity {
     addButton(root,"Save as JPG",()->{if(ready())JpgExport.choose(this,SAVE_JPG,"JB-Single-ID-Card-A4.jpg");});
     addButton(root,"Save PDF",()->{if(!ready())return;Intent i=new Intent(Intent.ACTION_CREATE_DOCUMENT);i.setType("application/pdf");i.addCategory(Intent.CATEGORY_OPENABLE);i.putExtra(Intent.EXTRA_TITLE,"JB-ID-Cards-A4.pdf");startActivityForResult(i,SAVE);});
     status=new TextView(this);status.setText("Capture both sides, then print or save.");status.setTextSize(14);status.setTextColor(Color.rgb(85,103,125));status.setPadding(6,12,6,12);root.addView(status);
+  }
+  void showSourceChoices(boolean isFront){
+    java.util.ArrayList<String> labels=new java.util.ArrayList<>();
+    java.util.ArrayList<Runnable> actions=new java.util.ArrayList<>();
+    final int pickCode=isFront?PICK_FRONT:PICK_BACK;
+    final int cameraCode=isFront?CAMERA_FRONT:CAMERA_BACK;
+    labels.add("Gallery / Saved scan");actions.add(()->pick(pickCode));
+    labels.add("Camera");actions.add(()->openCamera(cameraCode));
+    labels.add("Find Wi-Fi Scanners");actions.add(()->WifiScannerDiscovery.show(this));
+    boolean epsonInstalled=getPackageManager().getLaunchIntentForPackage("com.epson.epsonsmart")!=null
+        ||getPackageManager().getLaunchIntentForPackage("com.epson.epsonsmartpanel")!=null;
+    if(epsonInstalled){
+      labels.add("Epson Smart Panel");actions.add(()->openEpsonScanner());
+    }
+    new android.app.AlertDialog.Builder(this)
+      .setTitle(isFront?"Select FRONT source":"Select BACK source")
+      .setItems(labels.toArray(new String[0]),(dialog,which)->actions.get(which).run())
+      .setNegativeButton("Cancel",null).show();
   }
   void addButtonRow(LinearLayout parent,String left,Runnable leftAction,String right,Runnable rightAction){
     LinearLayout row=new LinearLayout(this);row.setOrientation(LinearLayout.HORIZONTAL);
