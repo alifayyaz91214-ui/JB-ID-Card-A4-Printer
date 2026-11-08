@@ -161,7 +161,7 @@ public class PassportActivity extends Activity {
       public void onNothingSelected(android.widget.AdapterView<?> parent){}
     });root.addView(bg);
     TextView editNote=new TextView(this);editNote.setText("Background replacement uses corner-color matching, not AI person segmentation. Review hair edges and official photo rules. Clothes change requires a separate AI model and is not available yet.");root.addView(editNote);
-    TextView fitting=new TextView(this);fitting.setText("Auto-fill places the maximum photos that fit with 6.35 mm cutting gaps and corner cut guides. Enter a number to print fewer.");root.addView(fitting);
+    TextView fitting=new TextView(this);fitting.setText("Auto-fill places the maximum photos that fit with 6.35 mm gaps and crop marks 2 mm outside each photo. Enter a number to print fewer.");root.addView(fitting);
     Button jpg=new Button(this);jpg.setText("Save selected sheet as JPG");polishButton(jpg,false);root.addView(jpg);jpg.setOnClickListener(v->{if(ready())JpgExport.choose(this,SAVE_JPG,"JB-Passport-Photos-"+paperName()+".jpg");});
     Button pdf=new Button(this);pdf.setText("Save selected sheet as PDF");polishButton(pdf,false);root.addView(pdf);
     pdf.setOnClickListener(v->{if(!ready())return;Intent i=new Intent(Intent.ACTION_CREATE_DOCUMENT);i.setType("application/pdf");i.addCategory(Intent.CATEGORY_OPENABLE);i.putExtra(Intent.EXTRA_TITLE,"JB-Passport-Photos-"+paperName()+".pdf");startActivityForResult(i,SAVE);});
@@ -309,18 +309,24 @@ public class PassportActivity extends Activity {
     }
   }
 
-  // Short crop marks stay outside the image and show the exact cut boundary.
-  // Coordinates are PDF points, so guides scale correctly in PDF, JPG and print.
+  // Cut OUTSIDE the photo edge, leaving 2 mm of white paper on every side.
+  // Corner guides start at the intended cut rectangle, not at the image border.
+  // A 6.35 mm gap leaves room for 2 mm margins on adjacent photos.
   void drawCutMarks(Canvas canvas,RectF r){
     Paint guide=new Paint(Paint.ANTI_ALIAS_FLAG);
-    guide.setColor(Color.rgb(75,85,99));guide.setStrokeWidth(.65f);
-    float offset=2f,length=5f;
-    float[] xs={r.left,r.right},ys={r.top,r.bottom};
-    for(float x:xs)for(float y:ys){
-      float horizontal=x==r.left?-1f:1f;
-      float vertical=y==r.top?-1f:1f;
-      canvas.drawLine(x+horizontal*offset,y,x+horizontal*(offset+length),y,guide);
-      canvas.drawLine(x,y+vertical*offset,x,y+vertical*(offset+length),guide);
+    guide.setColor(Color.rgb(80,87,100));
+    guide.setStrokeWidth(.6f);
+    final float whiteMargin=2f*72f/25.4f; // 2 mm
+    final float markLength=.85f*72f/25.4f;
+    float[] xs={r.left-whiteMargin,r.right+whiteMargin};
+    float[] ys={r.top-whiteMargin,r.bottom+whiteMargin};
+    for(int ix=0;ix<2;ix++)for(int iy=0;iy<2;iy++){
+      float x=xs[ix],y=ys[iy];
+      float dx=ix==0?-1f:1f,dy=iy==0?-1f:1f;
+      // The intersection (x,y) is the cutting corner; short marks extend
+      // outward, so no line touches the actual passport photo.
+      canvas.drawLine(x,y,x+dx*markLength,y,guide);
+      canvas.drawLine(x,y,x,y+dy*markLength,guide);
     }
   }
   void showCropEditor(){
