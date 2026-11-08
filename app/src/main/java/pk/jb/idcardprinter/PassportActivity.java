@@ -184,6 +184,7 @@ public class PassportActivity extends Activity {
   }
   boolean ready(){
     if(photo==null){status.setText("Select a portrait first.");return false;}
+    if(photo.getWidth()<700||photo.getHeight()<900){status.setText("Warning: source photo is only "+photo.getWidth()+" x "+photo.getHeight()+" px. Use a higher-resolution original for sharp prints.");}
     if(photoCount<1||photoCount>maximumCopies()){
       status.setText("Only "+maximumCopies()+" photos fit at exact size on "+paperName()+". Choose fewer photos or larger paper.");
       return false;
@@ -193,18 +194,18 @@ public class PassportActivity extends Activity {
   @Override protected void onActivityResult(int req,int result,Intent data){
     super.onActivityResult(req,result,data);
     if(result!=RESULT_OK||data==null)return;
-    if(req==CAMERA){Object taken=data.getExtras()==null?null:data.getExtras().get("data");if(taken instanceof Bitmap){photo=(Bitmap)taken;cropArea=null;refreshPreview();status.setText("Camera image loaded. Review resolution and preview before printing.");}else status.setText("Camera returned no image.");return;}
+    if(req==CAMERA){Object taken=data.getExtras()==null?null:data.getExtras().get("data");if(taken instanceof Bitmap){photo=(Bitmap)taken;cropArea=null;refreshPreview();status.setText("Camera image loaded. For sharp printing, use a full-resolution gallery image: some camera apps return only a small thumbnail.");}else status.setText("Camera returned no image.");return;}
     if(data.getData()==null)return;
-    if(req==SAVE_JPG){try{final int pw=paperWidth(),ph=paperHeight();final int jw=Math.round(pw*300f/72f),jh=Math.round(ph*300f/72f);final Bitmap image=editedPhoto(2000);JpgExport.save(this,data.getData(),jw,jh,c->{c.scale((float)jw/pw,(float)jh/ph);drawSheet(c,pw,ph,image);});status.setText("JPG photo sheet saved.");}catch(Exception e){status.setText("JPG save failed: "+e.getMessage());}return;}
+    if(req==SAVE_JPG){try{final int pw=paperWidth(),ph=paperHeight();final int jw=Math.round(pw*300f/72f),jh=Math.round(ph*300f/72f);final Bitmap image=editedPhoto(5000);JpgExport.save(this,data.getData(),jw,jh,c->{c.scale((float)jw/pw,(float)jh/ph);drawSheet(c,pw,ph,image);});status.setText("JPG photo sheet saved.");}catch(Exception e){status.setText("JPG save failed: "+e.getMessage());}return;}
     if(req==SAVE){try(OutputStream out=getContentResolver().openOutputStream(data.getData())){PdfDocument doc=makePdf();doc.writeTo(out);doc.close();status.setText(paperName()+" PDF saved.");}catch(Exception e){status.setText("Save failed: "+e.getMessage());}return;}
     if(req==PICK){try{
       BitmapFactory.Options o=new BitmapFactory.Options();o.inJustDecodeBounds=true;
       try(InputStream in=getContentResolver().openInputStream(data.getData())){BitmapFactory.decodeStream(in,null,o);}
-      o.inSampleSize=1;while(Math.max(o.outWidth/o.inSampleSize,o.outHeight/o.inSampleSize)>2000)o.inSampleSize*=2;
+      o.inSampleSize=1;while(Math.max(o.outWidth/o.inSampleSize,o.outHeight/o.inSampleSize)>5000)o.inSampleSize*=2;
       o.inJustDecodeBounds=false;
       try(InputStream in=getContentResolver().openInputStream(data.getData())){photo=BitmapFactory.decodeStream(in,null,o);cropArea=null;}
       if(photo==null)throw new IOException("Invalid image");
-      refreshPreview();status.setText("Photo loaded. Check face position before printing.");
+      refreshPreview();status.setText("Photo loaded: "+photo.getWidth()+" x "+photo.getHeight()+" px. Check crop and print preview.");
     }catch(Exception e){status.setText("Photo error: "+e.getMessage());}}
   }
   Paint finishingPaint(){
@@ -272,7 +273,7 @@ public class PassportActivity extends Activity {
     int pageW=paperWidth(),pageH=paperHeight();
     PdfDocument doc=new PdfDocument();PdfDocument.Page page=doc.startPage(new PdfDocument.PageInfo.Builder(pageW,pageH,1).create());
     Canvas canvas=page.getCanvas();canvas.drawColor(Color.WHITE);
-    drawSheet(canvas,pageW,pageH,editedPhoto(2000));
+    drawSheet(canvas,pageW,pageH,editedPhoto(5000));
     doc.finishPage(page);return doc;
   }
   void drawSheet(Canvas canvas,int pageW,int pageH,Bitmap outputPhoto){
@@ -288,6 +289,8 @@ public class PassportActivity extends Activity {
     float blockHeight=rows*h+Math.max(0,rows-1)*gapY;
     float top=sheetPosition==0?12f:sheetPosition==2?pageH-12f-blockHeight:(pageH-blockHeight)/2f;
     Paint imagePaint=finishingPaint();
+    imagePaint.setFilterBitmap(true);
+    imagePaint.setDither(true);
     Paint border=new Paint(3);border.setColor(Color.BLACK);border.setStrokeWidth(.65f);border.setStyle(Paint.Style.STROKE);
     for(int row=0;row<rows;row++)for(int col=0;col<cols;col++){
       if(row*cols+col>=visibleCount)continue;
