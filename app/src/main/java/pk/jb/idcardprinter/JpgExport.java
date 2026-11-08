@@ -18,13 +18,13 @@ public final class JpgExport {
     activity.startActivityForResult(i,request);
   }
   public static void save(Activity activity,Uri destination,int width,int height,Drawer drawer)throws Exception{
-    Bitmap image=Bitmap.createBitmap(width,height,Bitmap.Config.RGB_565);
+    Bitmap image=Bitmap.createBitmap(width,height,Bitmap.Config.ARGB_8888);
     try{
       Canvas canvas=new Canvas(image);
       canvas.drawColor(Color.WHITE);
       drawer.draw(canvas);
       try(OutputStream out=activity.getContentResolver().openOutputStream(destination)){
-        if(out==null||!image.compress(Bitmap.CompressFormat.JPEG,95,out))throw new java.io.IOException("JPG export failed");
+        if(out==null||!image.compress(Bitmap.CompressFormat.JPEG,98,out))throw new java.io.IOException("JPG export failed");
       }
     }finally{image.recycle();}
   }
