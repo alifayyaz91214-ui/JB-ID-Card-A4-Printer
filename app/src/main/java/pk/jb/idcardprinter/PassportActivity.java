@@ -22,6 +22,7 @@ public class PassportActivity extends Activity {
   int sizeIndex=0;
   boolean a4=false;
   int paperIndex=0; // 0=4R, 1=A4, 2=5x7, 3=A5
+  int sheetPosition=1; // 0 top, 1 center, 2 bottom
   TextView capacityLabel;
   int brightness=0;
   int contrast=100;
@@ -111,6 +112,25 @@ public class PassportActivity extends Activity {
       public void onNothingSelected(android.widget.AdapterView<?> parent){}
     });root.addView(paper);
     capacityLabel=new TextView(this);capacityLabel.setTextSize(16);capacityLabel.setTextColor(Color.rgb(21,83,148));root.addView(capacityLabel);
+    TextView positionLabel=new TextView(this);
+    positionLabel.setText("Place photos on sheet");
+    positionLabel.setTextSize(17);
+    positionLabel.setTextColor(Color.rgb(21,38,65));
+    root.addView(positionLabel);
+    RadioGroup positionOptions=new RadioGroup(this);
+    positionOptions.setOrientation(RadioGroup.HORIZONTAL);
+    String[] positions={"Top","Center","Bottom"};
+    for(int k=0;k<positions.length;k++){
+      final int choice=k;
+      RadioButton option=new RadioButton(this);
+      option.setText(positions[k]);option.setTextSize(14);
+      option.setId(View.generateViewId());
+      positionOptions.addView(option,new RadioGroup.LayoutParams(0,-2,1f));
+      if(k==sheetPosition)option.setChecked(true);
+      option.setOnClickListener(v->{sheetPosition=choice;updateSheet();});
+    }
+    root.addView(positionOptions);
+
     TextView enhanceLabel=new TextView(this);enhanceLabel.setText("Photo finishing - brightness");enhanceLabel.setTextSize(17);root.addView(enhanceLabel);
     SeekBar light=new SeekBar(this);light.setMax(100);light.setProgress(50);
     light.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener(){
@@ -264,7 +284,9 @@ public class PassportActivity extends Activity {
     int maxRows=Math.max(1,(int)Math.floor((pageH-24f+gapY)/(h+gapY)));
     int visibleCount=Math.min(photoCount,cols*maxRows);
     rows=(visibleCount+cols-1)/cols;
-    float left=(pageW-(cols*w+(cols-1)*gapX))/2f,top=(pageH-(rows*h+(rows-1)*gapY))/2f;
+    float left=(pageW-(cols*w+(cols-1)*gapX))/2f;
+    float blockHeight=rows*h+Math.max(0,rows-1)*gapY;
+    float top=sheetPosition==0?12f:sheetPosition==2?pageH-12f-blockHeight:(pageH-blockHeight)/2f;
     Paint imagePaint=finishingPaint();
     Paint border=new Paint(3);border.setColor(Color.BLACK);border.setStrokeWidth(.65f);border.setStyle(Paint.Style.STROKE);
     for(int row=0;row<rows;row++)for(int col=0;col<cols;col++){
