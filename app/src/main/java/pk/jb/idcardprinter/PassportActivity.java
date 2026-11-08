@@ -161,7 +161,7 @@ public class PassportActivity extends Activity {
       public void onNothingSelected(android.widget.AdapterView<?> parent){}
     });root.addView(bg);
     TextView editNote=new TextView(this);editNote.setText("Background replacement uses corner-color matching, not AI person segmentation. Review hair edges and official photo rules. Clothes change requires a separate AI model and is not available yet.");root.addView(editNote);
-    TextView fitting=new TextView(this);fitting.setText("Auto-fill places the maximum photos that fit; entering a number prints only that many. All sizes use physical millimeter dimensions and cutting gaps.");root.addView(fitting);
+    TextView fitting=new TextView(this);fitting.setText("Auto-fill places the maximum photos that fit with 6.35 mm cutting gaps and corner cut guides. Enter a number to print fewer.");root.addView(fitting);
     Button jpg=new Button(this);jpg.setText("Save selected sheet as JPG");polishButton(jpg,false);root.addView(jpg);jpg.setOnClickListener(v->{if(ready())JpgExport.choose(this,SAVE_JPG,"JB-Passport-Photos-"+paperName()+".jpg");});
     Button pdf=new Button(this);pdf.setText("Save selected sheet as PDF");polishButton(pdf,false);root.addView(pdf);
     pdf.setOnClickListener(v->{if(!ready())return;Intent i=new Intent(Intent.ACTION_CREATE_DOCUMENT);i.setType("application/pdf");i.addCategory(Intent.CATEGORY_OPENABLE);i.putExtra(Intent.EXTRA_TITLE,"JB-Passport-Photos-"+paperName()+".pdf");startActivityForResult(i,SAVE);});
@@ -171,8 +171,8 @@ public class PassportActivity extends Activity {
   int paperWidth(){return new int[]{289,595,360,420}[paperIndex];}
   int paperHeight(){return new int[]{431,842,504,595}[paperIndex];}
   String paperName(){return new String[]{"4R","A4","5x7","A5"}[paperIndex];}
-  float gapX(){return 9f;}
-  float gapY(){return 9f;}
+  float gapX(){return 18f;} // 6.35 mm cutting clearance
+  float gapY(){return 18f;} // 6.35 mm cutting clearance
   int columns(){
     float w=widths[sizeIndex]*72f/25.4f;
     return Math.max(1,(int)Math.floor((paperWidth()-24f+gapX())/(w+gapX())));
@@ -302,10 +302,27 @@ public class PassportActivity extends Activity {
       if(cropArea!=null){source=new Rect(Math.max(0,Math.round(cropArea.left*sw)),Math.max(0,Math.round(cropArea.top*sh)),Math.min(sw,Math.round(cropArea.right*sw)),Math.min(sh,Math.round(cropArea.bottom*sh)));}
       else if(ratio>desired){int cw=Math.round(sh*desired);int x0=(sw-cw)/2;source=new Rect(x0,0,x0+cw,sh);}
       else{int ch=Math.round(sw/desired);int y0=(sh-ch)/2;source=new Rect(0,y0,sw,y0+ch);}
-      canvas.drawBitmap(outputPhoto,source,target,imagePaint);canvas.drawRect(target,border);
+      canvas.drawBitmap(outputPhoto,source,target,imagePaint);
+      canvas.drawRect(target,border);
+      drawCutMarks(canvas,target);
+
     }
   }
 
+  // Short crop marks stay outside the image and show the exact cut boundary.
+  // Coordinates are PDF points, so guides scale correctly in PDF, JPG and print.
+  void drawCutMarks(Canvas canvas,RectF r){
+    Paint guide=new Paint(Paint.ANTI_ALIAS_FLAG);
+    guide.setColor(Color.rgb(75,85,99));guide.setStrokeWidth(.65f);
+    float offset=2f,length=5f;
+    float[] xs={r.left,r.right},ys={r.top,r.bottom};
+    for(float x:xs)for(float y:ys){
+      float horizontal=x==r.left?-1f:1f;
+      float vertical=y==r.top?-1f:1f;
+      canvas.drawLine(x+horizontal*offset,y,x+horizontal*(offset+length),y,guide);
+      canvas.drawLine(x,y+vertical*offset,x,y+vertical*(offset+length),guide);
+    }
+  }
   void showCropEditor(){
     if(photo==null){status.setText("Select a portrait first.");return;}
     final float aspect=widths[sizeIndex]/heights[sizeIndex];
