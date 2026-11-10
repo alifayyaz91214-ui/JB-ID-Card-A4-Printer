@@ -182,8 +182,8 @@ public class CropActivity extends Activity {
       paint.setStrokeWidth(3.5f);canvas.drawPath(path,paint);paint.setStyle(Paint.Style.FILL);
       for(int i=0;i<4;i++){
         float cx=px[i],cy=py[i];
-        paint.setColor(Color.BLACK);canvas.drawCircle(cx,19,paint);
-        paint.setColor(i==selected?Color.CYAN:Color.YELLOW);canvas.drawCircle(cx,13,paint);
+        paint.setColor(Color.BLACK);canvas.drawCircle(cx,cy,19,paint);
+        paint.setColor(i==selected?Color.CYAN:Color.YELLOW);canvas.drawCircle(cx,cy,13,paint);
       }
       if(showLoupe&&active>=0)drawCornerLoupe(canvas);
       paint.setColor(Color.WHITE);canvas.restore();
