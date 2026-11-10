@@ -111,6 +111,7 @@ public class CropActivity extends Activity {
     Bitmap bitmap;float[] points=new float[8];Paint paint=new Paint(3);
     float scale,ox,oy;float zoom=1f;int active=-1,selected=0;
     float touchOffsetX,touchOffsetY;
+    boolean showLoupe=false;float loupeImageX,loupeImageY;
     CropView(){super(CropActivity.this);setBackgroundColor(Color.rgb(30,30,30));}
     void reset(){
       if(bitmap==null)return;
@@ -159,11 +160,58 @@ public class CropActivity extends Activity {
       ox=(getWidth()-bitmap.getWidth()*scale)/2f;oy=(getHeight()-bitmap.getHeight()*scale)/2f;
       canvas.save();canvas.clipRect(0,0,getWidth(),getHeight());
       canvas.drawBitmap(bitmap,null,new RectF(ox,oy,ox+bitmap.getWidth()*scale,oy+bitmap.getHeight()*scale),paint);
-      Path path=new Path();path.moveTo(ox+points[0]*scale,oy+points[1]*scale);
-      for(int i=1;i<4;i++)path.lineTo(ox+points[i*2]*scale,oy+points[i*2+1]*scale);
-      path.close();paint.setColor(Color.YELLOW);paint.setStyle(Paint.Style.STROKE);paint.setStrokeWidth(4);canvas.drawPath(path,paint);paint.setStyle(Paint.Style.FILL);
-      for(int i=0;i<4;i++){float x=ox+points[2*i]*scale,y=oy+points[2*i+1]*scale;paint.setColor(Color.BLACK);canvas.drawCircle(x,y,19,paint);paint.setColor(i==selected?Color.CYAN:Color.YELLOW);canvas.drawCircle(x,y,13,paint);}
+      // Rounded visual outline; the four actual crop points stay exact.
+      float[] px=new float[4],py=new float[4];
+      for(int i=0;i<4;i++){px[i]=ox+points[i*2]*scale;py[i]=oy+points[i*2+1]*scale;}
+      Path path=new Path();
+      float cornerRadius=12f;
+      for(int i=0;i<4;i++){
+        int prev=(i+3)%4,next=(i+1)%4;
+        float da=(float)Math.hypot(px[prev]-px[i],py[prev]-py[i]);
+        float db=(float)Math.hypot(px[next]-px[i],py[next]-py[i]);
+        float ra=Math.min(cornerRadius,da*.25f),rb=Math.min(cornerRadius,db*.25f);
+        float ax=px[i]+(px[prev]-px[i])*ra/Math.max(1f,da);
+        float ay=py[i]+(py[prev]-py[i])*ra/Math.max(1f,da);
+        float bx=px[i]+(px[next]-px[i])*rb/Math.max(1f,db);
+        float by=py[i]+(py[next]-py[i])*rb/Math.max(1f,db);
+        if(i==0)path.moveTo(ax,ay);else path.lineTo(ax,ay);
+        path.quadTo(px[i],py[i],bx,by);
+      }
+      path.close();
+      paint.setColor(Color.YELLOW);paint.setStyle(Paint.Style.STROKE);
+      paint.setStrokeWidth(3.5f);canvas.drawPath(path,paint);paint.setStyle(Paint.Style.FILL);
+      for(int i=0;i<4;i++){
+        float cx=px[i],cy=py[i];
+        paint.setColor(Color.BLACK);canvas.drawCircle(cx,19,paint);
+        paint.setColor(i==selected?Color.CYAN:Color.YELLOW);canvas.drawCircle(cx,13,paint);
+      }
+      if(showLoupe&&active>=0)drawCornerLoupe(canvas);
       paint.setColor(Color.WHITE);canvas.restore();
+    }
+    // Magnifying glass follows the selected corner while staying above the finger.
+    void drawCornerLoupe(Canvas canvas){
+      final float radius=78f;
+      float fingerX=ox+loupeImageX*scale,fingerY=oy+loupeImageY*scale;
+      float cx=Math.max(radius+12,Math.min(getWidth()-radius-12,fingerX));
+      float cy=fingerY-175f;
+      if(cy<radius+12)cy=Math.min(getHeight()-radius-12,fingerY+175f);
+      cy=Math.max(radius+12,Math.min(getHeight()-radius-12,cy));
+      Paint bg=new Paint(Paint.ANTI_ALIAS_FLAG);
+      bg.setColor(Color.WHITE);bg.setStyle(Paint.Style.FILL);
+      canvas.drawCircle(cx,cy,radius+5,bg);
+      canvas.save();
+      Path circle=new Path();circle.addCircle(cx,cy,radius,Path.Direction.CW);canvas.clipPath(circle);
+      float magnification=Math.max(2.4f,Math.min(5f,2.5f/Math.max(.5f,scale)));
+      float sx=ox+points[2*active]*scale,sy=oy+points[2*active+1]*scale;
+      canvas.save();canvas.translate(cx,cy);canvas.scale(magnification,magnification);canvas.translate(-sx,-sy);
+      Paint imagePaint=new Paint(Paint.ANTI_ALIAS_FLAG|Paint.FILTER_BITMAP_FLAG);
+      canvas.drawBitmap(bitmap,null,new RectF(ox,oy,ox+bitmap.getWidth()*scale,oy+bitmap.getHeight()*scale),imagePaint);
+      canvas.restore();
+      Paint cross=new Paint(Paint.ANTI_ALIAS_FLAG);cross.setColor(Color.rgb(0,200,255));cross.setStrokeWidth(2f);
+      canvas.drawLine(cx-17,cy,cx+17,cy,cross);canvas.drawLine(cx,cy-17,cx,cy+17,cross);
+      canvas.restore();
+      bg.setStyle(Paint.Style.STROKE);bg.setStrokeWidth(4);bg.setColor(Color.rgb(23,110,216));
+      canvas.drawCircle(cx,cy,radius+3,bg);
     }
     @Override public boolean onTouchEvent(android.view.MotionEvent e){
       if(bitmap==null)return false;
@@ -178,15 +226,15 @@ public class CropActivity extends Activity {
           // If no card was found, leave the existing corners unchanged.
           active=-1;return true;
         }
-        selected=active;
+        selected=active;showLoupe=true;loupeImageX=x;loupeImageY=y;
         // Maintain a finger-to-corner offset: the thumb can stay away from the exact edge.
         touchOffsetX=points[2*active]-x;touchOffsetY=points[2*active+1]-y;
         invalidate();return true;
       }
       if(e.getAction()==MotionEvent.ACTION_MOVE&&active>=0){
-        points[2*active]=Math.max(0,Math.min(bitmap.getWidth(),x+touchOffsetX));points[2*active+1]=Math.max(0,Math.min(bitmap.getHeight(),y+touchOffsetY));invalidate();return true;
+        points[2*active]=Math.max(0,Math.min(bitmap.getWidth(),x+touchOffsetX));points[2*active+1]=Math.max(0,Math.min(bitmap.getHeight(),y+touchOffsetY));loupeImageX=x;loupeImageY=y;showLoupe=true;invalidate();return true;
       }
-      if(e.getAction()==MotionEvent.ACTION_UP){active=-1;return true;}
+      if(e.getAction()==MotionEvent.ACTION_UP||e.getAction()==MotionEvent.ACTION_CANCEL){active=-1;showLoupe=false;invalidate();return true;}
       return true;
     }
   }
