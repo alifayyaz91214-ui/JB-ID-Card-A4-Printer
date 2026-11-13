@@ -1,0 +1,30 @@
+
+name: Delete Old APK Build Runs
+
+on:
+  workflow_dispatch:
+
+permissions:
+  actions: write
+  contents: read
+
+jobs:
+  cleanup:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Delete old APK workflow runs
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          CURRENT_RUN: ${{ github.run_id }}
+        run: |
+          gh api --paginate \
+            "repos/$REPO/actions/runs?per_page=100" \
+            --jq '.workflow_runs[] | select(.name == "Build Android APK") | .id' |
+          while read -r run_id; do
+            if [ "$run_id" != "$CURRENT_RUN" ]; then
+              echo "Deleting run $run_id"
+              gh api -X DELETE "repos/$REPO/actions/runs/$run_id"
+            fi
+          done
+          
