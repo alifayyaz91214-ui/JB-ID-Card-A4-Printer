@@ -3,35 +3,22 @@ on:
   workflow_dispatch:
   push:
     branches: [main]
+    paths-ignore:
+      - '.github/workflows/cleanup.yml'
+      - '.github/workflows/create-signing-key.yml'
+      - 'README.md'
+
+concurrency:
+  group: build-apk-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   build:
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     permissions:
-      contents: read
-      actions: write
+      contents: write
     steps:
-      - name: Remove old APK artifacts (keep latest two)
-        uses: actions/github-script@v7
-        with:
-          script: |
-            const name = 'JB-ID-Card-A4-Printer-signed-release';
-            const artifacts = await github.paginate(github.rest.actions.listArtifactsForRepo, {
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              per_page: 100
-            });
-            const apkArtifacts = artifacts.filter(a => a.name === name)
-              .sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
-            core.info(`Found ${apkArtifacts.length} signed APK artifacts; keeping the newest two.`);
-            for (const artifact of apkArtifacts.slice(2)) {
-              await github.rest.actions.deleteArtifact({
-                owner: context.repo.owner,
-                repo: context.repo.repo,
-                artifact_id: artifact.id
-              });
-              core.info(`Deleted old APK artifact ${artifact.id}`);
-            }
       - uses: actions/checkout@v4
       - uses: actions/setup-java@v4
         with:
@@ -68,10 +55,23 @@ jobs:
       - name: Verify signed APK
         run: |
           "$ANDROID_SDK_ROOT/build-tools/35.0.0/apksigner" verify --verbose "app/build/outputs/apk/release/app-release.apk"
-      - uses: actions/upload-artifact@v4
-        with:
-          name: JB-ID-Card-A4-Printer-signed-release
-          path: app/build/outputs/apk/release/app-release.apk
-          if-no-files-found: error
-          retention-days: 1
-          compression-level: 0
+      - name: Publish APK to GitHub Releases
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RUN_NUMBER: ${{ github.run_number }}
+        run: |
+          TAG="v1.2.${RUN_NUMBER}"
+          cp app/build/outputs/apk/release/app-release.apk "AbeeDocs-${TAG}.apk"
+          gh release create "$TAG" "AbeeDocs-${TAG}.apk" \
+            --repo "$GITHUB_REPOSITORY" \
+            --target "$GITHUB_SHA" \
+            --title "AbeeDocs ${TAG}" \
+            --notes "Signed APK built automatically from commit ${GITHUB_SHA::7}."
+      - name: Keep only the newest 5 releases
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release list --repo "$GITHUB_REPOSITORY" --limit 100 --json tagName --jq '.[5:][].tagName' |
+          while read -r old_tag; do
+            [ -n "$old_tag" ] && gh release delete "$old_tag" --repo "$GITHUB_REPOSITORY" --cleanup-tag --yes
+          done
